@@ -398,7 +398,7 @@ umichldap_init(void)
 }
 
 struct trans_func umichldap_trans = {
-	.method         = TR_UMICH_SCHEMA,
+	.name		= "umich_ldap",
 	.init		= umichldap_init,
 	.princ_to_ids   = umichldap_gss_princ_to_ids,
 	.name_to_uid    = umichldap_name_to_uid,

@@ -211,7 +211,7 @@ static int nss_gss_princ_to_ids(char *princ, uid_t *uid, uid_t *gid)
 }
 
 struct trans_func nss_trans = {
-	.method		= TR_NSS,
+	.name		= "nsswitch",
 	.init		= NULL,
 	.princ_to_ids	= nss_gss_princ_to_ids,
 	.name_to_uid	= nss_name_to_uid,

@@ -9,11 +9,11 @@ Excerpt from /etc/idmapd.conf:
 ---------------------
 #
 # One of
-#   0 for TR_NSS (getpwXXX routines)
-#   1 for TR_UMICH_LDAP
+#   nsswitch (getpwXXX routines, all names must be in default domain)
+#   umich_ldap (ldap schema, also capable of handling multiple domains)
 [Translation]
 
-Method = 1
+Method = umich_ldap
 
 [UMICH_SCHEMA]
 
@@ -23,29 +23,28 @@ NFSv4_name_attr = NFSv4Name
 NFSv4_group_attr = NFSv4Name
 GSS_principal_attr = GSSAuthName
 
-TR_NSS
+nsswitch
 ------
-The default set is called TR_NSS, and is indicated by the idmapd.conf
-[Translation] Method 0. The TR_NSS functions use the get password
+
+The default set is called nsswitch. The nsswitch functions use the get password
 file entry functions getpwname(), getpwid(), and the get group file entry
-functions getgrnam(), getgrgid(). The TR_NSS functions can therefore be
+functions getgrnam(), getgrgid(). The nsswitch functions can therefore be
 configured by the /etc/nss_switch.conf passwd data base stanza. If secure
-communications are required (AUTH_GSS), the passwd data base stanza can
-contain the 'file' entry because the rpc.idmapd and rpc.svcgssd run as root,
-and/or the 'ldap' entry if the ldap service is configured to use SASL in
-/etc/ldap.conf.  The 'nis' entry is NOT recommended, it does not have a
-secure communications mode.
+communications are required (AUTH_GSS), the passwd data base stanza can contain
+the 'file' entry because the rpc.idmapd and rpc.svcgssd run as root, and/or the
+'ldap' entry if the ldap service is configured to use SASL in /etc/ldap.conf.
+The 'nis' entry is NOT recommended, it does not have a secure communications
+mode.
 
 
-TR_UMICH_LDAP
+umich_ldap
 ------------
-The second set of mapping functions is a new experimental set called
-TR_UMICH_LDAP, indicated by the idmapd.conf [Translation] Method 1 as shown
+The second set of mapping functions is a new experimental set called umich_ldap
 in the idmapd.conf example above.  This set of translation functions are
-designed to service remote users, allowing remote users to set and get ACLs
-as well as map GSS principals to id's. The functions are LDAP based, and
-the ldap search filters look for attribute names set by idmapd.conf
-[UMICH_SCHEMA] NFSv4_name_attr, NFSv4_group_attr, and GSS_principal_attr.
+designed to service remote users, allowing remote users to set and get ACLs as
+well as map GSS principals to id's. The functions are LDAP based, and the ldap
+search filters look for attribute names set by idmapd.conf [UMICH_SCHEMA]
+NFSv4_name_attr, NFSv4_group_attr, and GSS_principal_attr.
 
 It is assumed that the LDAP server will index these attributes, and that these
 attributes will be associated with the nss.schema posixAccount uidNumber and

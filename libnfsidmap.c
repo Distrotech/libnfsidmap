@@ -50,11 +50,9 @@
 #include "cfg.h"
 
 /* forward declarations */
-int set_trans_method(int);
+int set_trans_method(char *);
 
 static char *default_domain;
-
-static int method;
 
 #ifndef PATH_IDMAPDCONF
 #define PATH_IDMAPDCONF "/etc/idmapd.conf"
@@ -83,6 +81,7 @@ static struct trans_func *trans;
 int nfs4_init_name_mapping(char *conffile)
 {
 	int ret;
+	char *method;
 
 	/* XXX: need to be able to reload configurations... */
 	if (initialized == 1)
@@ -99,7 +98,9 @@ int nfs4_init_name_mapping(char *conffile)
 			return ret;
 		}
 	}
-	method = conf_get_num("Translation", "Method", TR_NSS);
+	method = conf_get_str("Translation", "Method");
+	if (method == NULL)
+		method = "nsswitch";
 	if (set_trans_method(method) == -1) {
 		warnx("Error in translation table setup");
 		return -1;
@@ -144,18 +145,23 @@ nfs4_get_default_domain(char *server, char *domain, size_t len)
 extern struct trans_func nss_trans;
 extern struct trans_func umichldap_trans;
 
-static struct trans_func * t_array[TR_SIZE + 1] = {
-	[TR_NSS] = &nss_trans,
-	[TR_UMICH_SCHEMA] = &umichldap_trans,
-	[TR_SIZE] = NULL,
+#define TR_SIZE 2
+static struct trans_func * t_array[TR_SIZE] = {
+	[0] = &nss_trans,
+	[1] = &umichldap_trans,
 };
 
 int
-set_trans_method(int method)
+set_trans_method(char *method)
 {
-	if (method > -1 && method < TR_SIZE) {
-		trans = t_array[method];
-		return 0;
+	int i;
+
+	trans = NULL;
+	for (i = 0; i < TR_SIZE; i++) {
+		if (strcmp(t_array[i]->name, method)) {
+			trans = t_array[i];
+			return 0;
+		}
 	}
 	return -1;
 }
