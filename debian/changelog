@@ -1,3 +1,11 @@
+libnfsidmap (0.8-1) unstable; urgency=low
+
+  * kwc: separate user lookups from group lookups using different search
+    filters and bases
+  * kwc: Add initial support for supplementary group lookup
+
+ -- J. Bruce Fields <bfields@fieldses.org>  Tue,  4 Jan 2005 12:20:43 -0500
+
 libnfsidmap (0.7-1) unstable; urgency=low
 
   * From kwc: fix conf_path so conf file is read correctly.
