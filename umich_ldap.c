@@ -144,11 +144,11 @@ umich_name_to_ids(char *name, int idtype, uid_t *uid, gid_t *gid,
 	};
 	LDAPMessage *result, *entry;
 	BerElement *ber = NULL;
-	char **idstr, filter[LDAP_FILT_MAXSIZ];
+	char **idstr, filter[LDAP_FILT_MAXSIZ], base[LDAP_FILT_MAXSIZ];
 	struct attr uid_attr;
 	const char **attrs;
 	char *attr_res;
-	int count = 0,  err, f_len;
+	int count = 0,  err, f_len, b_len;
 	int sizelimit = 1;
 
 	err = -EINVAL;
@@ -166,12 +166,22 @@ umich_name_to_ids(char *name, int idtype, uid_t *uid, gid_t *gid,
 			warnx("ERROR: umich_name_to_ids: filter too long!\n");
 			goto out;
 		}
+		if (b_len = snprintf(base, LDAP_FILT_MAXSIZ, "%s,%s",
+				"ou=People", lbase) == LDAP_FILT_MAXSIZ) {
+			warnx("ERROR: umich_name_to_ids: base too long!\n");
+			goto out;
+		}
 	}
 	else if (idtype == IDTYPE_GROUP) {
 		if (f_len = snprintf(filter, LDAP_FILT_MAXSIZ,
 			"(&(objectClass=NFSv4RemoteGroup)(%s=%s))",
 			attrtype, name) == LDAP_FILT_MAXSIZ) {
 			warnx("ERROR: umich_name_to_ids: filter too long!\n");
+			goto out;
+		}
+		if (b_len = snprintf(base, LDAP_FILT_MAXSIZ, "%s,%s",
+				"ou=Groups", lbase) == LDAP_FILT_MAXSIZ) {
+			warnx("ERROR: umich_name_to_ids: base too long!\n");
 			goto out;
 		}
 	}
@@ -201,7 +211,7 @@ umich_name_to_ids(char *name, int idtype, uid_t *uid, gid_t *gid,
 
 	uattr_init(uid_attr.u_attr);
 	attrs = uid_attr.u_attr[0];
-	err = ldap_search_st(ld, lbase, LDAP_SCOPE_SUBTREE,
+	err = ldap_search_st(ld, base, LDAP_SCOPE_SUBTREE,
 			 filter, (char **)attrs,
 			 0, &timeout, &result);
 	if (err < 0 ) {
@@ -230,20 +240,16 @@ umich_name_to_ids(char *name, int idtype, uid_t *uid, gid_t *gid,
 	for (attr_res = ldap_first_attribute(ld, result, &ber);
 	     attr_res != NULL;
 	     attr_res = ldap_next_attribute(ld, result, ber)) {
+		if (!(idstr = ldap_get_values(ld, result, attr_res))) {
+			ldap_perror(ld, "ldap_get_values\n");
+			goto out_memfree;
+		}
 		if (strcasecmp(attr_res, "uidNumber") == 0) {
-			if (!(idstr = ldap_get_values(ld, result, attr_res))) {
-				ldap_perror(ld, "ldap_get_values(uidNumber)\n");
-				goto out_memfree;
-			}
 			*uid = atoi(*idstr);
 		} else if (strcasecmp(attr_res, "gidNumber") == 0) {
-			if (!(idstr = ldap_get_values(ld, result, attr_res))) {
-				ldap_perror(ld, "ldap_get_values(gidNumber)\n");
-				goto out_memfree;
-			}
 			*gid = atoi(*idstr);
 		} else {
-			warnx("umich_name_to_ids: received attr %s???\n",
+			warnx("umich_name_to_ids: received attr '%s' ???\n",
 				attr_res);
 			ldap_memfree(attr_res);
 			ldap_value_free(idstr);
