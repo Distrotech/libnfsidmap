@@ -58,8 +58,6 @@ static char *default_domain;
 #define PATH_IDMAPDCONF "/etc/idmapd.conf"
 #endif
 
-static char *conf_path = PATH_IDMAPDCONF;
-
 static int domain_from_dns(char **domain)
 {
 	struct hostent *he;
@@ -87,6 +85,8 @@ int nfs4_init_name_mapping(char *conffile)
 		return 0;
 	if (conffile)
 		conf_path = conffile;
+	else
+		conf_path = PATH_IDMAPDCONF;
 	conf_init();
 	default_domain = conf_get_str("General", "Domain");
 	if (default_domain == NULL) {
