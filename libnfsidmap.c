@@ -1,5 +1,5 @@
 /*
- *  idmapd.c
+ *  libnfsidmap.c
  *
  *  nfs idmapping library, primarily for nfs4 client/server kernel idmapping
  *  and for userland nfs4 idmapping by acl libraries.
