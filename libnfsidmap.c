@@ -89,7 +89,7 @@ int nfs4_uid_to_name(uid_t uid, char *domain, char *name, size_t len)
 		goto out_buf;
 	err = write_name(name, pw->pw_name, domain, len);
 out_buf:
-	kfree(buf);
+	free(buf);
 out:
 	return err;
 }
@@ -110,7 +110,7 @@ int nfs4_gid_to_name(gid_t gid, char *domain, char *name, size_t len)
 		goto out_buf;
 	err = write_name(name, gr->gr_name, domain, len);
 out_buf:
-	kfree(buf);
+	free(buf);
 out:
 	return err;
 }
@@ -151,9 +151,9 @@ int nfs4_name_to_uid(char *name, uid_t *uid)
 		goto out_name;
 	*uid = pw->pw_uid;
 out_name:
-	kfree(localname);
+	free(localname);
 out_buf:
-	kfree(buf);
+	free(buf);
 out:
 	return err;
 }
@@ -177,9 +177,9 @@ int nfs4_name_to_gid(char *name, gid_t *gid)
 		goto out_name;
 	*gid = gr->gr_gid;
 out_name:
-	kfree(localname);
+	free(localname);
 out_buf:
-	kfree(buf);
+	free(buf);
 out:
 	return err;
 }
