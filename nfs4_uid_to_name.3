@@ -1,0 +1,49 @@
+.TH nfs4_uid_to_name 3  2004-08-05
+.SH NAME
+nfs4_uid_to_name, nfs4_gid_to_name, nfs4_name_to_uid, nfs4_name_to_gid: idmapping for nfsv4
+.SH SYNOPSIS
+.B #include <nfs4_idmap.h>
+.sp
+.BI "int nfs4_uid_to_name(uid_t uid, char *domain, char *name, size_t len);"
+.sp
+.BI "int nfs4_gid_to_name(gid_t gid, char *domain, char *name, size_t len);"
+.sp
+.BI "int nfs4_name_to_uid(char *name, uid_t *uid);"
+.sp
+.BI "int nfs4_name_to_gid(char *name, gid_t *gid);"
+.fi
+.SH DESCRIPTION
+NFSv4 uses names of the form
+.IR user@domain .
+To write code that helps the kernel map uid's (as
+rpc.idmapd
+does) or that processes NFSv4 ACLs, you need to be able to convert between
+NFSv4 names and local uids and gids.
+.PP
+The
+.B nfs4_uid_to_name()
+and
+.B nfs4_gid_to_name()
+functions, given
+.I uid 
+or
+.I gid
+and 
+.I domain
+(as a null-terminated string),
+write the corresponding nfsv4 name into the buffer provided in
+.IR name ,
+which must be of length at least
+.IR len .
+.PP
+The 
+.B nfs4_name_to_uid()
+and
+.B nfs4_name_to_gid()
+functions, given
+.I name
+(as a null-terminated string), return the corresponding uid or gid in
+the second parameter.
+.SH RETURN VALUE
+All functions return 0 or, in the case of error, -ERRNO.
+(XXX Itemize errors here.)
