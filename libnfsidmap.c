@@ -130,6 +130,17 @@ char * get_default_domain(void)
 	return default_domain;
 }
 
+int
+nfs4_get_default_domain(char *server, char *domain, size_t len)
+{
+	char *d = get_default_domain();
+
+	if (strlen(d) + 1 > len)
+		return -ERANGE;
+	strcpy(domain, d);
+	return 0;
+}
+
 extern struct trans_func nss_trans;
 extern struct trans_func umichldap_trans;
 
