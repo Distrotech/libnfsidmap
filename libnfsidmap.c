@@ -158,7 +158,7 @@ set_trans_method(char *method)
 
 	trans = NULL;
 	for (i = 0; i < TR_SIZE; i++) {
-		if (strcmp(t_array[i]->name, method)) {
+		if (strcmp(t_array[i]->name, method) == 0) {
 			trans = t_array[i];
 			return 0;
 		}
