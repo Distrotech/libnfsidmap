@@ -59,7 +59,6 @@ static char *default_domain;
 #endif
 
 static char *conf_path = PATH_IDMAPDCONF;
-static int initialized = 0;
 
 static int domain_from_dns(char **domain)
 {
@@ -76,7 +75,7 @@ static int domain_from_dns(char **domain)
 	return 0;
 }
 
-static struct trans_func *trans;
+static struct trans_func *trans = NULL;
 
 int nfs4_init_name_mapping(char *conffile)
 {
@@ -84,7 +83,7 @@ int nfs4_init_name_mapping(char *conffile)
 	char *method;
 
 	/* XXX: need to be able to reload configurations... */
-	if (initialized == 1)
+	if (trans) /* already succesfully initialized */
 		return 0;
 	if (conffile)
 		conf_path = conffile;
@@ -108,10 +107,11 @@ int nfs4_init_name_mapping(char *conffile)
 
 	if (trans->init) {
 		ret = trans->init();
-		if (ret)
+		if (ret) {
+			trans = NULL;
 			return ret;
+		}
 	}
-	initialized = 1;
 
 	return 0;
 }
