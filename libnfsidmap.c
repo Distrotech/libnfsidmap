@@ -151,7 +151,7 @@ int nfs4_name_to_uid(char *name, uid_t *uid)
 	localname = strip_domain(name);
 	if (!localname)
 		goto out_buf;
-	err = -getpwnam_r(name, &pwbuf, buf, buflen, &pw);
+	err = -getpwnam_r(localname, &pwbuf, buf, buflen, &pw);
 	if (pw == NULL)
 		err = -ENOENT;
 	if (err)
@@ -179,7 +179,7 @@ int nfs4_name_to_gid(char *name, gid_t *gid)
 	localname = strip_domain(name);
 	if (!localname)
 		goto out_buf;
-	err = -getgrnam_r(name, &grbuf, buf, buflen, &gr);
+	err = -getgrnam_r(localname, &grbuf, buf, buflen, &gr);
 	if (gr == NULL)
 		err = -ENOENT;
 	if (err)
