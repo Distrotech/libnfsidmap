@@ -144,41 +144,42 @@ umich_name_to_ids(char *name, int idtype, uid_t *uid, gid_t *gid,
 	struct attr uid_attr;
 	const char **attrs;
 	char *attr_res;
-	int count = 0,  err = -ENOMEM, f_len;
+	int count = 0,  err, f_len;
 	int sizelimit = 1;
 
 	err = -EINVAL;
 	if (uid == NULL || gid == NULL || name == NULL || 
 	    attrtype == NULL || lserver == NULL || lbase == NULL)
-		return err;
+		goto out;
 
 	*uid = -1;
 	*gid = -1;
 
 	err = -ENOMEM;
-
 	/* The filter is of the form
 	  "(&(objectClass=NFSv4RemotePerson)(attrtype=name))" */
 	f_len = strlen("(&(objectClass=NFSv4RemotePerson)(=))") + 
 		strlen(attrtype) + strlen(name) + 1;	/* Add 1 for the null */
 	if (!(filter = (char *)malloc(f_len)))
-		return err;
+		goto out;
 
+	err = -EINVAL;
 	if (idtype == IDTYPE_USER) {
-		snprintf(filter, f_len, "(&(objectClass=NFSv4RemotePerson)(%s=%s))",
+		snprintf(filter, f_len,
+			"(&(objectClass=NFSv4RemotePerson)(%s=%s))",
 			attrtype, name);
 	}
 	else if (idtype == IDTYPE_GROUP) {
-		snprintf(filter, f_len, "(&(objectClass=NFSv4RemoteGroup)(%s=%s))",
+		snprintf(filter, f_len,
+			"(&(objectClass=NFSv4RemoteGroup)(%s=%s))",
 			attrtype, name);
 	}
 	else {
-		warnx("ERROR: umich_name_to_ids: invalid idtype (%d)\n", idtype);
+		warnx("ERROR: umich_name_to_ids: invalid idtype (%d)\n",
+			idtype);
+		goto out;
 	}
 
-	err = -EINVAL;
-	if ((lserver == NULL) || (lbase == NULL))
-		goto out;
 	if (!(ld = ldap_init(lserver, port))) {
 		warnx("ldap_init failed to [%s:%d]\n", lserver, port);
 		goto out;
@@ -208,7 +209,11 @@ umich_name_to_ids(char *name, int idtype, uid_t *uid, gid_t *gid,
 		goto out_unbind;
 	}
 
+	err = -ENOENT;
 	count = ldap_count_entries(ld, result);
+	if (count != 1) {
+		goto out_unbind;
+	}
 
 	if (!(entry = ldap_first_entry(ld, result))){
 		ldap_perror(ld, "ldap_first_entry\n");
@@ -246,6 +251,8 @@ umich_name_to_ids(char *name, int idtype, uid_t *uid, gid_t *gid,
 		ldap_memfree(attr_res);
 		ldap_value_free(idstr);
 	}
+
+	err = 0;
 out_memfree:
 	ber_free(ber, 0);
 out_unbind:
@@ -272,7 +279,7 @@ umich_id_to_name(uid_t id, int idtype, char **name, size_t len,
 	struct attr name_attr;
 	const char **attrs;
 	char *attr_res;
-	int count = 0,  err = -ENOMEM, f_len, b_len;
+	int count = 0,  err, f_len, b_len;
 	int sizelimit = 1;
 
 	err = -EINVAL;
@@ -281,16 +288,20 @@ umich_id_to_name(uid_t id, int idtype, char **name, size_t len,
 
 	snprintf(idstr, sizeof(idstr), "%d", id);
 
+	err = -ENOMEM;
+
 	/* The filter is of the form "(&(objectClass=%s)(XidNumber=###))" */
 	f_len = strlen("(&(objectClass=NFSv4RemotePerson)(XidNumber=))") + 
 		strlen(idstr) + 1;	/* Add 1 for the null */
-	if (!(filter = (char *)malloc(f_len)))
-		return err;
 
+	if (!(filter = (char *)malloc(f_len)))
+		goto out;
+	
 	b_len = strlen(lbase) + strlen("ou=People,") + 1; /* Add 1 for null */
 	if (!(base = (char *)malloc(b_len)))
-		return err;
+		goto out;
 
+	err = -EINVAL;
 	if (idtype == IDTYPE_USER) {
 		snprintf(filter, f_len,
 			 "(&(objectClass=NFSv4RemotePerson)(uidNumber=%s))",
@@ -304,6 +315,7 @@ umich_id_to_name(uid_t id, int idtype, char **name, size_t len,
 		snprintf(base, b_len, "%s,%s", "ou=Groups", lbase);
 	} else {
 		warnx("ERROR: umich_id_to_name: invalid idtype (%d)\n", idtype);
+		goto out;
 	}
 
 	if (!(ld = ldap_init(lserver, port))) {
@@ -334,7 +346,10 @@ umich_id_to_name(uid_t id, int idtype, char **name, size_t len,
 		goto out_unbind;
 	}
 
+	err = -ENOENT;
 	count = ldap_count_entries(ld, result);
+	if (count != 1)
+		goto out_unbind;
 
 	if (!(entry = ldap_first_entry(ld, result))){
 		printf("ldap_first_entry error: entry %p\n",entry);
@@ -355,6 +370,7 @@ umich_id_to_name(uid_t id, int idtype, char **name, size_t len,
 
 	memcpy (*name, *namestr, strlen(*namestr));
 
+	err = 0;
 out_memfree:
 	ldap_memfree(attr_res);
 	ber_free(ber, 0);
@@ -380,7 +396,7 @@ umich_uid_to_grouplist(uid_t uid, gid_t *groups, int *ngroups,
 	char *filter = NULL, *base = NULL, **namestr;
 	char uidstr[16];
 	struct attr name_attr;
-	const char *attrs[2];
+	char *attrs[2];
 	int count = 0,  err = -ENOMEM, f_len, b_len;
 	gid_t *curr_group;
 
@@ -397,12 +413,12 @@ umich_uid_to_grouplist(uid_t uid, gid_t *groups, int *ngroups,
 	f_len = strlen("(&(objectClass=posixGroup)(memberUid=))") + 
 		strlen(uidstr) + 1;	/* Add 1 for the null */
 	if (!(filter = (char *)malloc(f_len)))
-		return err;
+		goto out;
 
 	b_len = strlen(lbase) + strlen("ou=Groups,") + 1; /* Add 1 for null */
 	if (!(base = (char *)malloc(b_len))) {
 		free(filter);
-		return err;
+		goto out;
 	}
 
 	snprintf(filter, f_len,
@@ -413,19 +429,19 @@ umich_uid_to_grouplist(uid_t uid, gid_t *groups, int *ngroups,
 
 	if (!(ld = ldap_init(lserver, port))) {
 		warnx("ldap_init failed to [%s:%d]\n", lserver, port);
-		goto out;
+		goto out_free;
 	}
 
 	m_id = ldap_simple_bind(ld, NULL, NULL);
 	if (m_id < 0) {
 		ldap_perror(ld,"ldap_simple_bind");
-		goto out;
+		goto out_free;
 	}
 
 	err = ldap_result(ld, m_id, 0, &timeout, &result);
 	if (err < 0 ) {
 		warnx("ERROR: ldap_result of simple bind\n");
-		goto out;
+		goto out_free;
 	}
 
 	attrs[0] = "gidNumber";
@@ -483,9 +499,10 @@ umich_uid_to_grouplist(uid_t uid, gid_t *groups, int *ngroups,
 	}
 out_unbind:
 	ldap_unbind(ld);
-out:
+out_free:
 	free(filter);
 	free(base);
+out:
 	return err;
 }
 
