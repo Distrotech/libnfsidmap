@@ -2,6 +2,7 @@
 # automatically generated files out of CVS.  So if you check out a CVS tree
 # you will need to do:
 
+aclocal
 automake --add-missing
 autoconf
 ./configure
