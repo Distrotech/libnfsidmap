@@ -2,8 +2,10 @@ libnfsidmap (0.6-1) unstable; urgency=low
 
   * fix debian/copyright
   * add nfs4_gss_princ_to_grouplist
+  * read config file on demand from other library functions instead of
+    segfaulting if we forget to call nfs4_init_name_mapping() first.
 
- -- J. Bruce Fields <bfields@fieldses.org>  Sun, 14 Nov 2004 18:36:21 -0500
+ -- J. Bruce Fields <bfields@fieldses.org>  Wed, 17 Nov 2004 12:26:23 -0500
 
 libnfsidmap (0.5-1) unstable; urgency=low
 

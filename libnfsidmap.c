@@ -168,31 +168,61 @@ set_trans_method(char *method)
 
 int nfs4_uid_to_name(uid_t uid, char *domain, char *name, size_t len)
 {
+	int ret;
+
+	ret = nfs4_init_name_mapping(NULL);
+	if (ret)
+		return ret;
 	return trans->uid_to_name(uid, domain, name, len);
 }
 
 int nfs4_gid_to_name(gid_t gid, char *domain, char *name, size_t len)
 {
+	int ret;
+
+	ret = nfs4_init_name_mapping(NULL);
+	if (ret)
+		return ret;
 	return trans->gid_to_name(gid, domain, name, len);
 }
 
 int nfs4_name_to_uid(char *name, uid_t *uid)
 {
+	int ret;
+
+	ret = nfs4_init_name_mapping(NULL);
+	if (ret)
+		return ret;
 	return trans->name_to_uid(name, uid);
 }
 
 int nfs4_name_to_gid(char *name, gid_t *gid)
 {
+	int ret;
+
+	ret = nfs4_init_name_mapping(NULL);
+	if (ret)
+		return ret;
 	return trans->name_to_gid(name, gid);
 }
 
 int nfs4_gss_princ_to_ids(char *secname, char *princ, uid_t *uid, gid_t *gid)
 {
+	int ret;
+
+	ret = nfs4_init_name_mapping(NULL);
+	if (ret)
+		return ret;
 	return trans->princ_to_ids(secname, princ, uid, gid);
 }
 
 int nfs4_gss_princ_to_grouplist(char *secname, char *princ,
 		gid_t *groups, int *ngroups)
 {
+	int ret;
+
+	ret = nfs4_init_name_mapping(NULL);
+	if (ret)
+		return ret;
 	return trans->gss_princ_to_grouplist(secname, princ, groups, ngroups);
 }
