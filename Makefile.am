@@ -1,7 +1,7 @@
-VERSION=0.3
+VERSION=0.4
 man_MANS = nfs4_uid_to_name.3
 lib_LTLIBRARIES = libnfsidmap.la
-libnfsidmap_la_SOURCES = libnfsidmap.c nss.c umich_ldap.c cfg.c strlcpy.c
+libnfsidmap_la_SOURCES = libnfsidmap.c nss.c umich_ldap.c cfg.c strlcpy.c cfg.h nfsidmap_internal.h queue.h
 include_HEADERS = nfsidmap.h
 EXTRA_DIST = $(man_MANS)
 LIBS = -lldap
