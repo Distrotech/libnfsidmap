@@ -129,7 +129,7 @@ name_to_nobody(uid_t *uid, gid_t *gid)
 }
 
 int
-umich_name_to_ids(char *name, uid_t *uid, gid_t *gid,
+umich_name_to_ids(char *name, int idtype, uid_t *uid, gid_t *gid,
 		  char *attrtype, char *lserver, char *lbase)
 {
 	int m_id;
@@ -164,8 +164,17 @@ umich_name_to_ids(char *name, uid_t *uid, gid_t *gid,
 	if (!(filter = (char *)malloc(f_len)))
 		return err;
 
-	snprintf(filter, f_len, "(&(objectClass=NFSv4RemotePerson)(%s=%s))",
-		attrtype, name);
+	if (idtype == IDTYPE_USER) {
+		snprintf(filter, f_len, "(&(objectClass=NFSv4RemotePerson)(%s=%s))",
+			attrtype, name);
+	}
+	else if (idtype == IDTYPE_GROUP) {
+		snprintf(filter, f_len, "(&(objectClass=NFSv4RemoteGroup)(%s=%s))",
+			attrtype, name);
+	}
+	else {
+		warnx("ERROR: umich_name_to_ids: invalid idtype (%d)\n", idtype);
+	}
 
 	err = -EINVAL;
 	if ((lserver == NULL) || (lbase == NULL))
@@ -370,7 +379,7 @@ static int umichldap_gss_princ_to_ids(char *secname, char *principal,
 
 	if (strcmp(secname, "krb5") != 0)
 		return err;
-	err = umich_name_to_ids(principal, &rtnd_uid, &rtnd_gid,
+	err = umich_name_to_ids(principal, IDTYPE_USER, &rtnd_uid, &rtnd_gid,
 			attr_names.GSS_principal_attr, ldap_server,ldap_base);
 	/*
 	 * If no mapping in LDAP, but name starts with "nfs/*",
@@ -393,7 +402,7 @@ umichldap_name_to_uid(char *name, uid_t *uid)
 {
 	gid_t gid;
 
-	return umich_name_to_ids(name, uid, &gid, attr_names.NFSv4_name_attr,
+	return umich_name_to_ids(name, IDTYPE_USER, uid, &gid, attr_names.NFSv4_name_attr,
 					ldap_server, ldap_base);
 }
 
@@ -402,7 +411,7 @@ umichldap_name_to_gid(char *name, gid_t *gid)
 {
 	uid_t uid;
 
-	return umich_name_to_ids(name, &uid, gid, attr_names.NFSv4_name_attr,
+	return umich_name_to_ids(name, IDTYPE_GROUP, &uid, gid, attr_names.NFSv4_name_attr,
 					ldap_server, ldap_base);
 }
 
