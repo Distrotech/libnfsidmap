@@ -43,7 +43,10 @@
 #include <string.h>
 #include <pwd.h>
 #include <grp.h>
+#include <netdb.h>
+#include <err.h>
 #include "nfsidmap.h"
+#include "cfg.h"
 
 /* For now these are all just wrappers around getpwnam and friends;
  * we tack on the given domain to the results of getpwnam when looking up a uid,
@@ -61,7 +64,64 @@
  * So braindead.org uses names that are of the form uid@braindead.org, whereas
  * citi machines just use getpwnam, other umich machines use ldap, and
  * everybody else uses a constant mapping.
- */ 
+ */
+
+static char *default_domain;
+
+#ifndef PATH_IDMAPDCONF
+#define PATH_IDMAPDCONF "/etc/idmapd.conf"
+#endif
+
+static char *conf_path = PATH_IDMAPDCONF;
+
+static int domain_from_dns(char **domain)
+{
+	struct hostent *he;
+	char hname[64], *c;
+
+	if (gethostname(hname, sizeof(hname)) == -1)
+		return -1;
+	if ((he = gethostbyname(hname)) == NULL)
+		return -1;
+	if ((c = strchr(he->h_name, '.')) == NULL || *++c == '\0')
+		return -1;
+	*domain = strdup(c);
+	return 0;
+}
+
+int nfs4_init_name_mapping(char *conffile)
+{
+	int ret;
+
+	if (conffile)
+		conf_path = conffile;
+	conf_init();
+	default_domain = conf_get_str("General", "Domain");
+	if (default_domain == NULL) {
+		ret = domain_from_dns(&default_domain);
+		if (ret) {
+			warnx("unable to determine a default nfsv4 domain; "
+				" consider specifying one in idmapd.conf\n");
+			return ret;
+		}
+	}
+	return 0;
+}
+
+static char * get_default_domain(void)
+{
+	int ret;
+
+	if (default_domain)
+		return default_domain;
+	ret = domain_from_dns(&default_domain);
+	if (ret) {
+		warnx("unable to determine a default nfsv4 domain; "
+			" consider specifying one in idmapd.conf\n");
+		default_domain = "";
+	}
+	return default_domain;
+}
 
 static int write_name(char *dest, char *localname, char *domain, size_t len)
 {
@@ -85,6 +145,8 @@ int nfs4_uid_to_name(uid_t uid, char *domain, char *name, size_t len)
 	buf = malloc(buflen);
 	if (!buf)
 		goto out;
+	if (domain == NULL)
+		domain = get_default_domain();
 	err = -getpwuid_r(uid, &pwbuf, buf, buflen, &pw);
 	if (pw == NULL)
 		err = -ENOENT;
@@ -108,6 +170,8 @@ int nfs4_gid_to_name(gid_t gid, char *domain, char *name, size_t len)
 	buf = malloc(buflen);
 	if (!buf)
 		goto out;
+	if (domain == NULL)
+		domain = get_default_domain();
 	err = -getgrgid_r(gid, &grbuf, buf, buflen, &gr);
 	if (gr == NULL)
 		err = -ENOENT;
@@ -120,35 +184,36 @@ out:
 	return err;
 }
 
-static char *strip_domain(char *name)
+static char *strip_domain(char *name, char *domain)
 {
 	char *c, *l;
+	int len;
 
 	c = strchr(name, '@');
 	if (!c)
-		return strdup(name);
-	else {
-		int index = c - name;
-
-		l = malloc(index + 1);
-		memcpy(l, name, index);
-		l[index] = '\0';
-		return l;
-	}
+		return NULL;
+	if (strcmp(c + 1, domain) != 0)
+		return NULL;
+	len = c - name;
+	l = malloc(index + 1);
+	memcpy(l, name, len);
+	l[len] = '\0';
+	return l;
 }
 
 int nfs4_name_to_uid(char *name, uid_t *uid)
 {
 	struct passwd *pw = NULL;
 	struct passwd pwbuf;
-	char *buf, *localname;
+	char *buf, *localname, *domain;
 	size_t buflen = sysconf(_SC_GETPW_R_SIZE_MAX);
 	int err = -ENOMEM;
 
 	buf = malloc(buflen);
 	if (!buf)
 		goto out;
-	localname = strip_domain(name);
+	domain = get_default_domain();
+	localname = strip_domain(name, domain);
 	if (!localname)
 		goto out_buf;
 	err = -getpwnam_r(localname, &pwbuf, buf, buflen, &pw);
@@ -169,14 +234,15 @@ int nfs4_name_to_gid(char *name, gid_t *gid)
 {
 	struct group *gr = NULL;
 	struct group grbuf;
-	char *buf, *localname;
+	char *buf, *localname, *domain;
 	size_t buflen = sysconf(_SC_GETGR_R_SIZE_MAX);
 	int err = -ENOMEM;;
 
 	buf = malloc(buflen);
 	if (!buf)
 		goto out;
-	localname = strip_domain(name);
+	domain = get_default_domain();
+	localname = strip_domain(name, domain);
 	if (!localname)
 		goto out_buf;
 	err = -getgrnam_r(localname, &grbuf, buf, buflen, &gr);
