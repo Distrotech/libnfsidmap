@@ -1,3 +1,9 @@
+libnfsidmap (0.7-1) unstable; urgency=low
+
+  * From kwc: fix conf_path so conf file is read correctly.
+
+ -- J. Bruce Fields <bfields@fieldses.org>  Thu, 16 Dec 2004 15:41:29 -0500
+
 libnfsidmap (0.6-1) unstable; urgency=low
 
   * fix debian/copyright
