@@ -45,6 +45,10 @@
 
 #define MAX_ATTR_LEN 15
 
+#ifndef LDAP_FILT_MAXSIZ
+#define LDAP_FILT_MAXSIZ        1024
+#endif
+
 static char nfs4name[MAX_ATTR_LEN + 1];
 
 struct attribute_names {
@@ -140,7 +144,7 @@ umich_name_to_ids(char *name, int idtype, uid_t *uid, gid_t *gid,
 	};
 	LDAPMessage *result, *entry;
 	BerElement *ber = NULL;
-	char **idstr, *filter;
+	char **idstr, filter[LDAP_FILT_MAXSIZ];
 	struct attr uid_attr;
 	const char **attrs;
 	char *attr_res;
@@ -155,24 +159,21 @@ umich_name_to_ids(char *name, int idtype, uid_t *uid, gid_t *gid,
 	*uid = -1;
 	*gid = -1;
 
-	err = -ENOMEM;
-	/* The filter is of the form
-	  "(&(objectClass=NFSv4RemotePerson)(attrtype=name))" */
-	f_len = strlen("(&(objectClass=NFSv4RemotePerson)(=))") + 
-		strlen(attrtype) + strlen(name) + 1;	/* Add 1 for the null */
-	if (!(filter = (char *)malloc(f_len)))
-		goto out;
-
-	err = -EINVAL;
 	if (idtype == IDTYPE_USER) {
-		snprintf(filter, f_len,
+		if (f_len = snprintf(filter, LDAP_FILT_MAXSIZ,
 			"(&(objectClass=NFSv4RemotePerson)(%s=%s))",
-			attrtype, name);
+			attrtype, name) == LDAP_FILT_MAXSIZ) {
+			warnx("ERROR: umich_name_to_ids: filter too long!\n");
+			goto out;
+		}
 	}
 	else if (idtype == IDTYPE_GROUP) {
-		snprintf(filter, f_len,
+		if (f_len = snprintf(filter, LDAP_FILT_MAXSIZ,
 			"(&(objectClass=NFSv4RemoteGroup)(%s=%s))",
-			attrtype, name);
+			attrtype, name) == LDAP_FILT_MAXSIZ) {
+			warnx("ERROR: umich_name_to_ids: filter too long!\n");
+			goto out;
+		}
 	}
 	else {
 		warnx("ERROR: umich_name_to_ids: invalid idtype (%d)\n",
@@ -258,7 +259,6 @@ out_memfree:
 out_unbind:
 	ldap_unbind(ld);
 out:
-	free(filter);
 	return err;
 }
 
@@ -274,7 +274,7 @@ umich_id_to_name(uid_t id, int idtype, char **name, size_t len,
 	};
 	LDAPMessage *result, *entry;
 	BerElement *ber;
-	char *filter = NULL, *base = NULL, **namestr;
+	char **namestr, filter[LDAP_FILT_MAXSIZ], base[LDAP_FILT_MAXSIZ];
 	char idstr[16];
 	struct attr name_attr;
 	const char **attrs;
@@ -288,33 +288,36 @@ umich_id_to_name(uid_t id, int idtype, char **name, size_t len,
 
 	snprintf(idstr, sizeof(idstr), "%d", id);
 
-	err = -ENOMEM;
 
-	/* The filter is of the form "(&(objectClass=%s)(XidNumber=###))" */
-	f_len = strlen("(&(objectClass=NFSv4RemotePerson)(XidNumber=))") + 
-		strlen(idstr) + 1;	/* Add 1 for the null */
-
-	if (!(filter = (char *)malloc(f_len)))
-		goto out;
-	
-	b_len = strlen(lbase) + strlen("ou=People,") + 1; /* Add 1 for null */
-	if (!(base = (char *)malloc(b_len)))
-		goto out;
-
-	err = -EINVAL;
 	if (idtype == IDTYPE_USER) {
-		snprintf(filter, f_len,
-			 "(&(objectClass=NFSv4RemotePerson)(uidNumber=%s))",
-			 idstr);
-		snprintf(base, b_len, "%s,%s", "ou=People", lbase);
+		if (f_len = snprintf(filter, LDAP_FILT_MAXSIZ,
+			    "(&(objectClass=NFSv4RemotePerson)(uidNumber=%s))",
+			    idstr) == LDAP_FILT_MAXSIZ) {
+			warnx("ERROR: umich_id_to_name: filter too long!\n");
+			goto out;
+		}
+		if (b_len = snprintf(base, LDAP_FILT_MAXSIZ, "%s,%s",
+				"ou=People", lbase) == LDAP_FILT_MAXSIZ) {
+			warnx("ERROR: umich_id_to_name: base too long!\n");
+			goto out;
+		}
 
 	} else if (idtype == IDTYPE_GROUP) {
-		snprintf(filter, f_len,
-			 "(&(objectClass=NFSv4RemoteGroup)(gidNumber=%s))",
-			 idstr);
-		snprintf(base, b_len, "%s,%s", "ou=Groups", lbase);
+		if (f_len = snprintf(filter, LDAP_FILT_MAXSIZ,
+			    "(&(objectClass=NFSv4RemoteGroup)(gidNumber=%s))",
+			    idstr) == LDAP_FILT_MAXSIZ) {
+			warnx("ERROR: umich_id_to_name: filter too long!\n");
+			goto out;
+		}
+		if (b_len = snprintf(base, LDAP_FILT_MAXSIZ, "%s,%s",
+				"ou=Groups", lbase) == LDAP_FILT_MAXSIZ) {
+			warnx("ERROR: umich_id_to_name: base too long!\n");
+			goto out;
+		}
+
 	} else {
 		warnx("ERROR: umich_id_to_name: invalid idtype (%d)\n", idtype);
+		err = -EINVAL;
 		goto out;
 	}
 
@@ -377,8 +380,6 @@ out_memfree:
 out_unbind:
 	ldap_unbind(ld);
 out:
-	free(filter);
-	free(base);
 	return err;
 }
 
@@ -393,13 +394,12 @@ umich_uid_to_grouplist(uid_t uid, gid_t *groups, int *ngroups,
 		.tv_sec = 2,
 	};
 	LDAPMessage *result, *entry;
-	char *filter = NULL, *base = NULL, **namestr;
+	char **namestr, filter[LDAP_FILT_MAXSIZ], base[LDAP_FILT_MAXSIZ];
 	char uidstr[16];
 	struct attr name_attr;
 	char *attrs[2];
 	int count = 0,  err = -ENOMEM, f_len, b_len;
 	gid_t *curr_group;
-
 
 	err = -EINVAL;
 	if (lserver == NULL || lbase == NULL)
@@ -407,41 +407,35 @@ umich_uid_to_grouplist(uid_t uid, gid_t *groups, int *ngroups,
 
 	snprintf(uidstr, sizeof(uidstr), "%d", uid);
 
-	/* XXX Remove the need for all these mallocs! */
-
-	/* The filter is of the form "(&(objectClass=%s)(memberUid=###))" */
-	f_len = strlen("(&(objectClass=posixGroup)(memberUid=))") + 
-		strlen(uidstr) + 1;	/* Add 1 for the null */
-	if (!(filter = (char *)malloc(f_len)))
-		goto out;
-
-	b_len = strlen(lbase) + strlen("ou=Groups,") + 1; /* Add 1 for null */
-	if (!(base = (char *)malloc(b_len))) {
-		free(filter);
+	if (f_len = snprintf(filter, LDAP_FILT_MAXSIZ,
+			"(&(objectClass=posixGroup)(memberUid=%s))",
+			uidstr) == LDAP_FILT_MAXSIZ ) {
+		warnx("ERROR: umich_uid_to_grouplist: filter too long!\n");
 		goto out;
 	}
 
-	snprintf(filter, f_len,
-		 "(&(objectClass=posixGroup)(memberUid=%s))",
-		 uidstr);
-	snprintf(base, b_len, "%s,%s", "ou=Groups", lbase);
+	if (b_len = snprintf(base, LDAP_FILT_MAXSIZ, "%s,%s",
+			"ou=Groups", lbase) == LDAP_FILT_MAXSIZ) {
+		warnx("ERROR: umich_uid_to_grouplist: base too long!\n");
+		goto out;
+	}
 
 
 	if (!(ld = ldap_init(lserver, port))) {
 		warnx("ldap_init failed to [%s:%d]\n", lserver, port);
-		goto out_free;
+		goto out;
 	}
 
 	m_id = ldap_simple_bind(ld, NULL, NULL);
 	if (m_id < 0) {
 		ldap_perror(ld,"ldap_simple_bind");
-		goto out_free;
+		goto out;
 	}
 
 	err = ldap_result(ld, m_id, 0, &timeout, &result);
 	if (err < 0 ) {
 		warnx("ERROR: ldap_result of simple bind\n");
-		goto out_free;
+		goto out;
 	}
 
 	attrs[0] = "gidNumber";
@@ -479,6 +473,7 @@ umich_uid_to_grouplist(uid_t uid, gid_t *groups, int *ngroups,
 
 	curr_group = groups;
 
+	err = -ENOENT;
 	for (entry = ldap_first_entry(ld, result);
 	     entry != NULL;
 	     entry = ldap_next_entry(ld, entry)) {
@@ -497,11 +492,9 @@ umich_uid_to_grouplist(uid_t uid, gid_t *groups, int *ngroups,
 		*curr_group++ = atoi(vals[0]);
 		ldap_value_free(vals);
 	}
+	err = 0;
 out_unbind:
 	ldap_unbind(ld);
-out_free:
-	free(filter);
-	free(base);
 out:
 	return err;
 }
