@@ -116,6 +116,8 @@ out:
 	return err;
 }
 
+/* XXX: actually should return error, so can distinguish between
+ * memory allocation failure and failure to match domain */
 static char *strip_domain(char *name, char *domain)
 {
 	char *c, *l;
@@ -124,7 +126,7 @@ static char *strip_domain(char *name, char *domain)
 	c = strchr(name, '@');
 	if (!c)
 		return NULL;
-	if (strcmp(c + 1, domain) != 0)
+	if (domain && strcmp(c + 1, domain) != 0)
 		return NULL;
 	len = c - name;
 	l = malloc(len + 1);
@@ -191,16 +193,18 @@ out:
 	return err;
 }
 
-static int nss_gss_princ_to_ids(char *princ, uid_t *uid, uid_t *gid)
+static int nss_gss_princ_to_ids(char *secname, char *princ,
+		uid_t *uid, uid_t *gid)
 {
 	char *localprinc;
-	char *domain;
 	struct passwd   *pw = NULL;
 
-	domain = get_default_domain();
-	localprinc = strip_domain(princ, domain);
+	if (strcmp(secname, "krb5") != 0)
+		return -EINVAL;
+	/* XXX: not quite right?  Need to know default realm? */
+	localprinc = strip_domain(princ, NULL);
 	if (!localprinc)
-		return -ENOMEM;
+		return -EINVAL;
 	if (!(pw = getpwnam(localprinc)) &&
 		((memcmp("nfs/", localprinc, 4) != 0)
 		 		|| !(pw = getpwnam("nobody"))))

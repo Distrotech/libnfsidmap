@@ -321,12 +321,15 @@ out:
  * principal:   krb5  - princ@realm, use KrbName ldap attribute
  *              spkm3 - X.509 dn, use X509Name ldap attribute
  */
-static int umichldap_gss_princ_to_ids(char *principal, uid_t *uid, gid_t *gid)
+static int umichldap_gss_princ_to_ids(char *secname, char *principal,
+		uid_t *uid, gid_t *gid)
 {
 	uid_t id = -1;
 	gid_t gd = -1;
 	int err = -EINVAL;
 
+	if (strcmp(secname, "krb5") != 0)
+		return err;
 	err = umich_name_to_id(principal, &id, &gd,
 			attr_names.GSS_principal_attr, ldap_server,ldap_base);
 	if ((err < 0) && (memcmp(principal, "nfs/", 4) == 0)){

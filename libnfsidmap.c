@@ -186,7 +186,7 @@ int nfs4_name_to_gid(char *name, gid_t *gid)
 	return trans->name_to_gid(name, gid);
 }
 
-int nfs4_gss_princ_to_ids(char *princ, uid_t *uid, gid_t *gid)
+int nfs4_gss_princ_to_ids(char *secname, char *princ, uid_t *uid, gid_t *gid)
 {
-	return trans->princ_to_ids(princ, uid, gid);
+	return trans->princ_to_ids(secname, princ, uid, gid);
 }
