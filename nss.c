@@ -43,6 +43,7 @@
 #include <grp.h>
 #include <netdb.h>
 #include <err.h>
+#include <grp.h>
 #include "nfsidmap.h"
 #include "nfsidmap_internal.h"
 #include "cfg.h"
@@ -118,7 +119,7 @@ out:
 
 /* XXX: actually should return error, so can distinguish between
  * memory allocation failure and failure to match domain */
-static char *strip_domain(char *name, char *domain)
+static char *strip_domain(const char *name, char *domain)
 {
 	char *c, *l;
 	int len;
@@ -205,14 +206,38 @@ static int nss_gss_princ_to_ids(char *secname, char *princ,
 	localprinc = strip_domain(princ, NULL);
 	if (!localprinc)
 		return -EINVAL;
-	if (!(pw = getpwnam(localprinc)) &&
-		((memcmp("nfs/", localprinc, 4) != 0)
-		 		|| !(pw = getpwnam("nobody"))))
+	/* XXX: shouldn't be hardwiring nfs/: */
+	/* XXX: temporarily disable nfs/ check for Solaris testing */
+	if (!(pw = getpwnam(localprinc)) && !(pw = getpwnam("nobody")))
 		return -1;
 	*uid = pw->pw_uid;
 	*gid = pw->pw_gid;
 	return 0;
 }
+
+int nss_gss_princ_to_grouplist(char *secname, char *princ,
+		gid_t *groups, int *ngroups)
+{
+	int ret;
+	struct passwd *pw;
+	char *localprinc;
+
+	if (strcmp(secname, "krb5") != 0)
+		return -EINVAL;
+	/* XXX: not quite right?  Need to know default realm? */
+	localprinc = strip_domain(princ, NULL);
+	if (!localprinc)
+		return -EINVAL;
+	pw = getpwnam(localprinc);
+	if (pw == NULL)
+		return -EINVAL;
+
+	ret = getgrouplist(localprinc, pw->pw_gid, groups, ngroups);
+	if (ret < 0)
+		return -ERANGE;
+	return ret;
+}
+
 
 struct trans_func nss_trans = {
 	.name		= "nsswitch",
@@ -222,4 +247,5 @@ struct trans_func nss_trans = {
 	.name_to_gid	= nss_name_to_gid,
 	.uid_to_name	= nss_uid_to_name,
 	.gid_to_name	= nss_gid_to_name,
+	.gss_princ_to_grouplist = nss_gss_princ_to_grouplist,
 };

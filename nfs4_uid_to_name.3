@@ -18,6 +18,8 @@ nfs4_uid_to_name, nfs4_gid_to_name, nfs4_name_to_uid, nfs4_name_to_gid, nfs4_ini
 .sp
 .BI "int nfs4_gss_princ_to_ids(char *princ, uid_t *uid, gid_t *gid);"
 .fi
+.BI "int nfs4_get_grouplist(const char *name, gid_t *groups, int *ngroups);"
+.fi
 .SH DESCRIPTION
 NFSv4 uses names of the form
 .IR user@domain .
@@ -74,14 +76,27 @@ should be a buffer of length
 The constant NFS4_MAX_DOMAIN_LEN may be used to determine a reasonable
 value for that length.
 .PP
+The function
+.B nfs4_get_grouplist()
+, given a
+.I name
+, fills the provided array
+.I groups
+with up to 
+.I *ngroups
+group IDs corresponding to which the user
+.I name
+belongs to, setting
+.I *ngroups
+to the actual number of such groups.  If the user belongs to more than
+.I *ngroups
+groups, then an error is returned and the actual number of groups is stored in
+*ngroups.
+.PP
 Finally,
 .B nfs4_gss_princ_to_ids()
 is used to convert from a gss principal name (as returned by
 .BR gss_display_name() )
 to a uid and gid.
-(XXX: Note an equivalent to
-.B getgrouplist()
-is also needed.)
 .SH RETURN VALUE
 All functions return 0 or, in the case of error, -ERRNO.
-(XXX Itemize errors here.)

@@ -379,6 +379,17 @@ umichldap_gid_to_name(gid_t gid, char *domain, char *name, size_t len)
 }
 
 static int
+umichldap_gss_princ_to_grouplist(char *secname, char *princ,
+		gid_t *groups, int *ngroups)
+{
+	/* XXX: We have no way to query ldap for supplementary groups at the
+	 * moment. */
+	ngroups = 0;
+	return 0;
+}
+
+
+static int
 umichldap_init(void)
 {
 	ldap_server = conf_get_str("UMICH_SCHEMA", "LDAP_server");
@@ -408,4 +419,5 @@ struct trans_func umichldap_trans = {
 	.name_to_gid    = umichldap_name_to_gid,
 	.uid_to_name    = umichldap_uid_to_name,
 	.gid_to_name    = umichldap_gid_to_name,
+	.gss_princ_to_grouplist = umichldap_gss_princ_to_grouplist,
 };

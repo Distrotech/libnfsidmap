@@ -190,3 +190,9 @@ int nfs4_gss_princ_to_ids(char *secname, char *princ, uid_t *uid, gid_t *gid)
 {
 	return trans->princ_to_ids(secname, princ, uid, gid);
 }
+
+int nfs4_gss_princ_to_grouplist(char *secname, char *princ,
+		gid_t *groups, int *ngroups)
+{
+	return trans->gss_princ_to_grouplist(secname, princ, groups, ngroups);
+}

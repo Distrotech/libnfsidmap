@@ -45,4 +45,5 @@ struct trans_func {
 	int (*name_to_gid)(char *name, gid_t *gid);
 	int (*uid_to_name)(uid_t uid, char *domain, char *name, size_t len);
 	int (*gid_to_name)(gid_t gid, char *domain, char *name, size_t len);
+	int (*gss_princ_to_grouplist)(char *secname, char *princ, gid_t *groups, int *ngroups);
 };
