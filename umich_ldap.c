@@ -377,8 +377,11 @@ static int umichldap_gss_princ_to_ids(char *secname, char *principal,
 	gid_t rtnd_gid = -1;
 	int err = -EINVAL;
 
-	if (strcmp(secname, "krb5") != 0)
+	if (strcmp(secname, "krb5") != 0) {
+		warnx("ERROR: umichldap_gss_princ_to_ids: invalid secname '%s'\n", secname);
 		return err;
+	}
+
 	err = umich_name_to_ids(principal, IDTYPE_USER, &rtnd_uid, &rtnd_gid,
 			attr_names.GSS_principal_attr, ldap_server,ldap_base);
 	/*
@@ -411,7 +414,7 @@ umichldap_name_to_gid(char *name, gid_t *gid)
 {
 	uid_t uid;
 
-	return umich_name_to_ids(name, IDTYPE_GROUP, &uid, gid, attr_names.NFSv4_name_attr,
+	return umich_name_to_ids(name, IDTYPE_GROUP, &uid, gid, attr_names.NFSv4_group_attr,
 					ldap_server, ldap_base);
 }
 
