@@ -350,8 +350,8 @@ out:
 }
 
 static int
-umich_uid_to_grouplist(uid_t uid, gid_t *groups, int *ngroups,
-		       char *lserver, char *lbase)
+umich_gss_princ_to_grouplist(char *principal, gid_t *groups, int *ngroups,
+			     char *lserver, char *lbase)
 {
 	int m_id;
 	LDAP *ld = NULL;
@@ -371,21 +371,6 @@ umich_uid_to_grouplist(uid_t uid, gid_t *groups, int *ngroups,
 	if (lserver == NULL || lbase == NULL)
 		goto out;
 
-	snprintf(uidstr, sizeof(uidstr), "%d", uid);
-
-	if (f_len = snprintf(filter, LDAP_FILT_MAXSIZ,
-			"(&(objectClass=posixGroup)(memberUid=%s))",
-			uidstr) == LDAP_FILT_MAXSIZ ) {
-		warnx("ERROR: umich_uid_to_grouplist: filter too long!\n");
-		goto out;
-	}
-
-	if (b_len = snprintf(base, LDAP_FILT_MAXSIZ, "%s,%s",
-			"ou=Groups", lbase) == LDAP_FILT_MAXSIZ) {
-		warnx("ERROR: umich_uid_to_grouplist: base too long!\n");
-		goto out;
-	}
-
 
 	if (!(ld = ldap_init(lserver, port))) {
 		warnx("ldap_init failed to [%s:%d]\n", lserver, port);
@@ -402,6 +387,74 @@ umich_uid_to_grouplist(uid_t uid, gid_t *groups, int *ngroups,
 	if (err < 0 ) {
 		warnx("ERROR: ldap_result of simple bind\n");
 		goto out;
+	}
+
+	/*
+	 * First we need to map the gss principal name to a uid (name) string
+	 */
+	err = -EINVAL;
+	if (f_len = snprintf(filter, LDAP_FILT_MAXSIZ,
+			     "(&(objectClass=%s)(%s=%s))",
+			     UMICH_OBJCLASS_REMOTE_PERSON,
+			     attr_names.GSS_principal_attr, principal)
+		    	== LDAP_FILT_MAXSIZ) {
+		warnx("ERROR: umich_gss_princ_to_grouplist: "
+		      "filter too long!\n");
+		goto out;
+	}
+
+	if (b_len = snprintf(base, LDAP_FILT_MAXSIZ, "%s,%s",
+			"ou=People", lbase) == LDAP_FILT_MAXSIZ) {
+		warnx("ERROR: umich_gss_princ_to_grouplist: base too long!\n");
+		goto out;
+	}
+
+	attrs[0] = "uid";
+	attrs[1] = NULL;
+
+	err = ldap_search_st(ld, base, LDAP_SCOPE_SUBTREE,
+			 filter, attrs,
+			 0, &timeout, &result);
+	if (err < 0 ) {
+		ldap_perror(ld, "ldap_search_st");
+		goto out_unbind;
+	}
+
+	err = -ENOENT;
+	count = ldap_count_entries(ld, result);
+	if (count != 1) {
+		goto out_unbind;
+	}
+
+	if (!(entry = ldap_first_entry(ld, result))){
+		printf("umich_gss_princ_to_grouplist error: entry %p\n",entry);
+		ldap_perror(ld,
+			    "umich_gss_princ_to_grouplist: ldap_first_entry\n");
+		goto out_unbind;
+	}
+
+	if (!(namestr = ldap_get_values(ld, result, attrs[0]))) {
+		ldap_perror(ld,
+			    "umich_gss_princ_to_grouplist: ldap_get_values\n");
+		goto out_unbind;
+	}
+
+	/*
+	 * Then determine the groups that uid (name) string is a member of
+	 */
+	err = -EINVAL;
+	if (f_len = snprintf(filter, LDAP_FILT_MAXSIZ,
+			"(&(objectClass=posixGroup)(memberUid=%s))",
+			*namestr) == LDAP_FILT_MAXSIZ ) {
+		warnx("ERROR: umich_gss_princ_to_grouplist: "
+		      "filter too long!\n");
+		goto out_unbind;
+	}
+
+	if (b_len = snprintf(base, LDAP_FILT_MAXSIZ, "%s,%s",
+			"ou=Groups", lbase) == LDAP_FILT_MAXSIZ) {
+		warnx("ERROR: umich_gss_princ_to_grouplist: base too long!\n");
+		goto out_unbind;
 	}
 
 	attrs[0] = "gidNumber";
@@ -548,17 +601,8 @@ umichldap_gss_princ_to_grouplist(char *secname, char *principal,
 		return err;
 	}
 
-	/* First we need to find a UID for the principal name */
-	err = umich_name_to_ids(principal, IDTYPE_USER, &rtnd_uid, &rtnd_gid,
-			attr_names.GSS_principal_attr, ldap_server, ldap_base);
-
-	/* If we can't map principal name to UID, we can't continue... */
-	if (err < 0) {
-		*ngroups = 0;
-		return 0;
-	}
-	return umich_uid_to_grouplist(rtnd_uid, groups, ngroups,
-					ldap_server, ldap_base);
+	return umich_gss_princ_to_grouplist(principal, groups, ngroups,
+					    ldap_server, ldap_base);
 }
 
 
