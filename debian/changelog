@@ -1,3 +1,11 @@
+libnfsidmap (0.3-1) unstable; urgency=low
+
+  * umich ldap schema support
+  * read configuration file for default domain, etc.
+  * add nfs4_get_default_domain()
+
+ -- J. Bruce Fields <bfields@fieldses.org>  Sun, 17 Oct 2004 13:23:34 -0400
+
 libnfsidmap (0.1-1) unstable; urgency=low
 
   * Initial Release.
