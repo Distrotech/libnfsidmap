@@ -96,24 +96,24 @@ uattr_init(const char ***uattr)
 }
 
 void
-init_n_attr(const char ***uattrs)
+init_n_attr(const char ***nattrs)
 {
-	static const char *__uattrs[1 + 1];
+	static const char *__nattrs[1 + 1];
 	int len = get_NFSv4_name_attr_len();
 
-	(*uattrs) = __uattrs;
+	(*nattrs) = __nattrs;
 
 	memcpy(nfs4name, get_NFSv4_name_attr(), len);
 	nfs4name[len] = '\0';
-	(*uattrs)[0] = nfs4name;
-	(*uattrs)[1] = NULL;
+	(*nattrs)[0] = nfs4name;
+	(*nattrs)[1] = NULL;
 }
 
 void
-nattr_init(const char ***uattr)
+nattr_init(const char ***nattr)
 {
-	init_n_attr(&uattr[0]);
-	uattr[1] = NULL;
+	init_n_attr(&nattr[0]);
+	nattr[1] = NULL;
 }
 
 int
@@ -129,7 +129,8 @@ name_to_nobody(uid_t *uid, gid_t *gid)
 }
 
 int
-umich_name_to_id(char *name, uid_t *uid, gid_t *gid, char *attrtype, char *lserver, char *lbase)
+umich_name_to_ids(char *name, uid_t *uid, gid_t *gid,
+		  char *attrtype, char *lserver, char *lbase)
 {
 	int m_id;
 	LDAP *ld = NULL;
@@ -138,22 +139,33 @@ umich_name_to_id(char *name, uid_t *uid, gid_t *gid, char *attrtype, char *lserv
 		.tv_sec = 2,
 	};
 	LDAPMessage *result, *entry;
-	BerElement *ber;
-	char **uidstr, *filter;
+	BerElement *ber = NULL;
+	char **idstr, *filter;
 	struct attr uid_attr;
 	const char **attrs;
 	char *attr_res;
 	int count = 0,  err = -ENOMEM, f_len;
 	int sizelimit = 1;
 
-
-	err = -ENOMEM;
-	f_len = strlen(attrtype) + strlen(name) + 2;
-	filter = (char *)malloc(f_len);
-	if (!filter)
+	err = -EINVAL;
+	if (uid == NULL || gid == NULL || name == NULL || 
+	    attrtype == NULL || lserver == NULL || lbase == NULL)
 		return err;
 
-	snprintf(filter, f_len,"%s=%s", attrtype,name);
+	*uid = -1;
+	*gid = -1;
+
+	err = -ENOMEM;
+
+	/* The filter is of the form
+	  "(&(objectClass=NFSv4RemotePerson)(attrtype=name))" */
+	f_len = strlen("(&(objectClass=NFSv4RemotePerson)(=))") + 
+		strlen(attrtype) + strlen(name) + 1;	/* Add 1 for the null */
+	if (!(filter = (char *)malloc(f_len)))
+		return err;
+
+	snprintf(filter, f_len, "(&(objectClass=NFSv4RemotePerson)(%s=%s))",
+		attrtype, name);
 
 	err = -EINVAL;
 	if ((lserver == NULL) || (lbase == NULL))
@@ -178,7 +190,8 @@ umich_name_to_id(char *name, uid_t *uid, gid_t *gid, char *attrtype, char *lserv
 
 	uattr_init(uid_attr.u_attr);
 	attrs = uid_attr.u_attr[0];
-	err = ldap_search_st(ld, lbase, LDAP_SCOPE_SUBTREE, filter, (char **)attrs,
+	err = ldap_search_st(ld, lbase, LDAP_SCOPE_SUBTREE,
+			 filter, (char **)attrs,
 			 0, &timeout, &result);
 	if (err < 0 ) {
 		ldap_perror(ld, "ldap_search_st");
@@ -193,35 +206,38 @@ umich_name_to_id(char *name, uid_t *uid, gid_t *gid, char *attrtype, char *lserv
 		goto out_unbind;
 	}
 
-	if (!(attr_res = ldap_first_attribute(ld, result, &ber))) {
-		ldap_perror(ld, "ldap_first_attribute\n");
-		goto out_unbind;
+	/*
+	 * Attributes come back in no particular order, so we need
+	 * to check each one to see what it is before assigning values.
+	 * XXX There must be a better way than comparing the
+	 * name of each attribute?
+	 */
+	for (attr_res = ldap_first_attribute(ld, result, &ber);
+	     attr_res != NULL;
+	     attr_res = ldap_next_attribute(ld, result, ber)) {
+		if (strcasecmp(attr_res, "uidNumber") == 0) {
+			if (!(idstr = ldap_get_values(ld, result, attr_res))) {
+				ldap_perror(ld, "ldap_get_values(uidNumber)\n");
+				goto out_memfree;
+			}
+			*uid = atoi(*idstr);
+		} else if (strcasecmp(attr_res, "gidNumber") == 0) {
+			if (!(idstr = ldap_get_values(ld, result, attr_res))) {
+				ldap_perror(ld, "ldap_get_values(gidNumber)\n");
+				goto out_memfree;
+			}
+			*gid = atoi(*idstr);
+		} else {
+			warnx("umich_name_to_ids: received attr %s???\n",
+				attr_res);
+			ldap_memfree(attr_res);
+			ldap_value_free(idstr);
+			goto out_memfree;
+		}
+		ldap_memfree(attr_res);
+		ldap_value_free(idstr);
 	}
-
-	if (!(uidstr = ldap_get_values(ld, result, attr_res))) {
-		ldap_perror(ld, "ldap_first_attribute\n");
-		goto out_memfree;
-	}
-
-	*uid = atoi(*uidstr);
-
-	ldap_memfree(attr_res);
-	ldap_value_free(uidstr);
-
-	if (!(attr_res = ldap_next_attribute(ld, result, ber))) {
-		ldap_perror(ld, "ldap_first_attribute\n");
-		goto out_unbind;
-	}
-
-	if (!(uidstr = ldap_get_values(ld, result, attr_res))) {
-		ldap_perror(ld, "ldap_first_attribute\n");
-		goto out_memfree;
-	}
-
-	*gid = atoi(*uidstr);
-
 out_memfree:
-	ldap_memfree(attr_res);
 	ber_free(ber, 0);
 out_unbind:
 	ldap_unbind(ld);
@@ -231,7 +247,8 @@ out:
 }
 
 int
-umich_uid_to_name(uid_t id, char **name, size_t len, char *attrtype, char *lserver, char *lbase)
+umich_id_to_name(uid_t id, int idtype, char **name, size_t len,
+		 char *lserver, char *lbase)
 {
 	int m_id;
 	LDAP *ld = NULL;
@@ -241,24 +258,45 @@ umich_uid_to_name(uid_t id, char **name, size_t len, char *attrtype, char *lserv
 	};
 	LDAPMessage *result, *entry;
 	BerElement *ber;
-	char *filter, **namestr;
+	char *filter = NULL, *base = NULL, **namestr;
 	char idstr[16];
 	struct attr name_attr;
 	const char **attrs;
 	char *attr_res;
-	int count = 0,  err = -ENOMEM, f_len;
+	int count = 0,  err = -ENOMEM, f_len, b_len;
 	int sizelimit = 1;
 
+	err = -EINVAL;
+	if (lserver == NULL || lbase == NULL || name == NULL)
+		goto out;
+
 	snprintf(idstr, sizeof(idstr), "%d", id);
-	f_len = strlen(attrtype) + strlen(idstr) + 2;
+
+	/* The filter is of the form "(&(objectClass=%s)(XidNumber=###))" */
+	f_len = strlen("(&(objectClass=NFSv4RemotePerson)(XidNumber=))") + 
+		strlen(idstr) + 1;	/* Add 1 for the null */
 	if (!(filter = (char *)malloc(f_len)))
 		return err;
 
-	snprintf(filter, f_len,"%s=%s", attrtype,idstr);
+	b_len = strlen(lbase) + strlen("ou=People,") + 1; /* Add 1 for null */
+	if (!(base = (char *)malloc(b_len)))
+		return err;
 
-	err = -EINVAL;
-	if (lserver == NULL || lbase == NULL)
-		goto out;
+	if (idtype == IDTYPE_USER) {
+		snprintf(filter, f_len,
+			 "(&(objectClass=NFSv4RemotePerson)(uidNumber=%s))",
+			 idstr);
+		snprintf(base, b_len, "%s,%s", "ou=People", lbase);
+
+	} else if (idtype == IDTYPE_GROUP) {
+		snprintf(filter, f_len,
+			 "(&(objectClass=NFSv4RemoteGroup)(gidNumber=%s))",
+			 idstr);
+		snprintf(base, b_len, "%s,%s", "ou=Groups", lbase);
+	} else {
+		warnx("ERROR: umich_id_to_name: invalid idtype (%d)\n", idtype);
+	}
+
 	if (!(ld = ldap_init(lserver, port))) {
 		warnx("ldap_init failed to [%s:%d]\n", lserver, port);
 		goto out;
@@ -279,7 +317,8 @@ umich_uid_to_name(uid_t id, char **name, size_t len, char *attrtype, char *lserv
 
 	nattr_init(name_attr.u_attr);
 	attrs = name_attr.u_attr[0];
-	err = ldap_search_st(ld, lbase, LDAP_SCOPE_SUBTREE, filter, (char **)attrs,
+	err = ldap_search_st(ld, base, LDAP_SCOPE_SUBTREE,
+			 filter, (char **)attrs,
 			 0, &timeout, &result);
 	if (err < 0 ) {
 		ldap_perror(ld, "ldap_search_st");
@@ -314,6 +353,7 @@ out_unbind:
 	ldap_unbind(ld);
 out:
 	free(filter);
+	free(base);
 	return err;
 }
 
@@ -324,22 +364,26 @@ out:
 static int umichldap_gss_princ_to_ids(char *secname, char *principal,
 		uid_t *uid, gid_t *gid)
 {
-	uid_t id = -1;
-	gid_t gd = -1;
+	uid_t rtnd_uid = -1;
+	gid_t rtnd_gid = -1;
 	int err = -EINVAL;
 
 	if (strcmp(secname, "krb5") != 0)
 		return err;
-	err = umich_name_to_id(principal, &id, &gd,
+	err = umich_name_to_ids(principal, &rtnd_uid, &rtnd_gid,
 			attr_names.GSS_principal_attr, ldap_server,ldap_base);
+	/*
+	 * If no mapping in LDAP, but name starts with "nfs/*",
+	 * then map to nobody
+	 */
 	if ((err < 0) && (memcmp(principal, "nfs/", 4) == 0)){
 		/* XXX: move this to svcgssd? */
-		err = name_to_nobody(&id, &gd);
+		err = name_to_nobody(&rtnd_uid, &rtnd_gid);
 	}
 	if (err < 0)
 		goto out;
-	*uid = id;
-	*gid = gd;
+	*uid = rtnd_uid;
+	*gid = rtnd_gid;
 out:
 	return err;
 }
@@ -349,7 +393,7 @@ umichldap_name_to_uid(char *name, uid_t *uid)
 {
 	gid_t gid;
 
-	return umich_name_to_id(name, uid, &gid, attr_names.NFSv4_name_attr,
+	return umich_name_to_ids(name, uid, &gid, attr_names.NFSv4_name_attr,
 					ldap_server, ldap_base);
 }
 
@@ -358,23 +402,21 @@ umichldap_name_to_gid(char *name, gid_t *gid)
 {
 	uid_t uid;
 
-	/* XXX Is this really getting us a gid?? */
-	return umich_name_to_id(name, &uid, gid, attr_names.NFSv4_name_attr,
+	return umich_name_to_ids(name, &uid, gid, attr_names.NFSv4_name_attr,
 					ldap_server, ldap_base);
 }
 
 static int
 umichldap_uid_to_name(uid_t uid, char *domain, char *name, size_t len)
 {
-	return umich_uid_to_name(uid, &name, len, "uidNumber",
+	return umich_id_to_name(uid, IDTYPE_USER, &name, len,
 					ldap_server, ldap_base);
 }
 
 static int
 umichldap_gid_to_name(gid_t gid, char *domain, char *name, size_t len)
 {
-	/* XXX groups should be treated differently. */
-	return umich_uid_to_name(gid, &name, len, "uidNumber",
+	return umich_id_to_name(gid, IDTYPE_GROUP, &name, len,
 					ldap_server, ldap_base);
 }
 
