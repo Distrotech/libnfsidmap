@@ -366,6 +366,130 @@ out:
 	return err;
 }
 
+int
+umich_uid_to_grouplist(uid_t uid, gid_t *groups, int *ngroups,
+		       char *lserver, char *lbase)
+{
+	int m_id;
+	LDAP *ld = NULL;
+	int port = LDAP_PORT;
+	struct timeval timeout = {
+		.tv_sec = 2,
+	};
+	LDAPMessage *result, *entry;
+	char *filter = NULL, *base = NULL, **namestr;
+	char uidstr[16];
+	struct attr name_attr;
+	const char *attrs[2];
+	int count = 0,  err = -ENOMEM, f_len, b_len;
+	gid_t *curr_group;
+
+
+	err = -EINVAL;
+	if (lserver == NULL || lbase == NULL)
+		goto out;
+
+	snprintf(uidstr, sizeof(uidstr), "%d", uid);
+
+	/* XXX Remove the need for all these mallocs! */
+
+	/* The filter is of the form "(&(objectClass=%s)(memberUid=###))" */
+	f_len = strlen("(&(objectClass=posixGroup)(memberUid=))") + 
+		strlen(uidstr) + 1;	/* Add 1 for the null */
+	if (!(filter = (char *)malloc(f_len)))
+		return err;
+
+	b_len = strlen(lbase) + strlen("ou=Groups,") + 1; /* Add 1 for null */
+	if (!(base = (char *)malloc(b_len))) {
+		free(filter);
+		return err;
+	}
+
+	snprintf(filter, f_len,
+		 "(&(objectClass=posixGroup)(memberUid=%s))",
+		 uidstr);
+	snprintf(base, b_len, "%s,%s", "ou=Groups", lbase);
+
+
+	if (!(ld = ldap_init(lserver, port))) {
+		warnx("ldap_init failed to [%s:%d]\n", lserver, port);
+		goto out;
+	}
+
+	m_id = ldap_simple_bind(ld, NULL, NULL);
+	if (m_id < 0) {
+		ldap_perror(ld,"ldap_simple_bind");
+		goto out;
+	}
+
+	err = ldap_result(ld, m_id, 0, &timeout, &result);
+	if (err < 0 ) {
+		warnx("ERROR: ldap_result of simple bind\n");
+		goto out;
+	}
+
+	attrs[0] = "gidNumber";
+	attrs[1] = NULL;
+
+	err = ldap_search_st(ld, base, LDAP_SCOPE_SUBTREE,
+			 filter, attrs,
+			 0, &timeout, &result);
+	if (err < 0 ) {
+		ldap_perror(ld, "ldap_search_st");
+		goto out_unbind;
+	}
+
+	/*
+	 * If we can't determine count, return that error
+	 * If we have nothing to return, return success
+	 * If we have more than they asked for, tell them the
+	 * number required and return an error
+	 */
+	count = ldap_count_entries(ld, result);
+	if (count < 0) {
+		err = count;
+		goto out_unbind;
+	}
+	if (count == 0) {
+		*ngroups = 0;
+		err = 0;
+		goto out_unbind;
+	}
+	if (count > *ngroups) {
+		*ngroups = count;
+		err = -EINVAL;
+		goto out_unbind;
+	}
+
+	curr_group = groups;
+
+	for (entry = ldap_first_entry(ld, result);
+	     entry != NULL;
+	     entry = ldap_next_entry(ld, entry)) {
+
+		char **vals;
+		int valcount;
+
+		vals = ldap_get_values(ld, entry, "gidNumber");
+
+		/* There should be only one gidNumber attribute per group */
+		if ((valcount = ldap_count_values(vals)) != 1) {
+			warnx("DB problem getting gidNumber of "
+			      "posixGroup! (count was %d)\n", valcount);
+			goto out_unbind;
+		}
+		*curr_group++ = atoi(vals[0]);
+		ldap_value_free(vals);
+	}
+out_unbind:
+	ldap_unbind(ld);
+out:
+	free(filter);
+	free(base);
+	return err;
+}
+
+
 /*
  * principal:   krb5  - princ@realm, use KrbName ldap attribute
  *              spkm3 - X.509 dn, use X509Name ldap attribute
@@ -433,13 +557,31 @@ umichldap_gid_to_name(gid_t gid, char *domain, char *name, size_t len)
 }
 
 static int
-umichldap_gss_princ_to_grouplist(char *secname, char *princ,
+umichldap_gss_princ_to_grouplist(char *secname, char *principal,
 		gid_t *groups, int *ngroups)
 {
-	/* XXX: We have no way to query ldap for supplementary groups at the
-	 * moment. */
-	ngroups = 0;
-	return 0;
+	uid_t rtnd_uid = -1;
+	gid_t rtnd_gid = -1;
+	int err = -EINVAL;
+
+	/* XXX Is this check necessary??? */
+	if (strcmp(secname, "krb5") != 0) {
+		warnx("ERROR: umichldap_gss_princ_to_grouplist: "
+		      "invalid secname '%s'\n", secname);
+		return err;
+	}
+
+	/* First we need to find a UID for the principal name */
+	err = umich_name_to_ids(principal, IDTYPE_USER, &rtnd_uid, &rtnd_gid,
+			attr_names.GSS_principal_attr, ldap_server, ldap_base);
+
+	/* If we can't map principal name to UID, we can't continue... */
+	if (err < 0) {
+		*ngroups = 0;
+		return 0;
+	}
+	return umich_uid_to_grouplist(rtnd_uid, groups, ngroups,
+					ldap_server, ldap_base);
 }
 
 
