@@ -7,7 +7,7 @@ include_HEADERS = nfsidmap.h
 EXTRA_DIST = $(man_MANS)
 LIBS = -lldap
 
+#	XXX: also exclude debian/files and debian/files.new ? do a clean??
 dist-hook:
 	mkdir $(distdir)/debian/
-	find $(srcdir)/debian -maxdepth 1 -type f |xargs -i cp {} $(distdir)/debian/
-	#XXX: also exclude debian/files and debian/files.new ? do a clean??
+	find $(srcdir)/debian -maxdepth 1 -not -type d |xargs -i cp {} $(distdir)/debian/
