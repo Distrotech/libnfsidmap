@@ -43,16 +43,43 @@
 #include "cfg.h"
 #include "nfsidmap_internal.h"
 
+#define MAX_ATTR_LEN 15
+
+static char nfs4name[MAX_ATTR_LEN + 1];
+
+struct attribute_names {
+	char *NFSv4_name_attr;
+	char *NFSv4_group_attr;
+	char *GSS_principal_attr;
+};
+
 struct attr {
 	const char **u_attr[2];
 };
 
 char *ldap_server = NULL, *ldap_base = NULL;
+static struct attribute_names attr_names = {
+	.NFSv4_name_attr = NULL,
+};
+
+static char *get_NFSv4_name_attr(void)
+{
+	return attr_names.NFSv4_name_attr;
+}
+
+static int get_NFSv4_name_attr_len(void)
+{
+	int len = strlen(attr_names.NFSv4_name_attr);
+
+	if (len > MAX_ATTR_LEN)
+		len = MAX_ATTR_LEN;
+	return len;
+}
 
 void
 init_u_attr(const char ***uattrs)
 {
-	static const char *__uattrs[15 + 1];
+	static const char *__uattrs[2 + 1];
 
 	(*uattrs) = __uattrs;
 
@@ -68,13 +95,17 @@ uattr_init(const char ***uattr)
 	uattr[1] = NULL;
 }
 
-init_n_attr (const char ***uattrs)
+void
+init_n_attr(const char ***uattrs)
 {
-	static const char *__uattrs[15 + 1];
+	static const char *__uattrs[1 + 1];
+	int len = get_NFSv4_name_attr_len();
 
 	(*uattrs) = __uattrs;
 
-	(*uattrs)[0] = "NFSv4Name";
+	memcpy(nfs4name, get_NFSv4_name_attr(), len);
+	nfs4name[len] = '\0';
+	(*uattrs)[0] = nfs4name;
 	(*uattrs)[1] = NULL;
 }
 
@@ -296,7 +327,8 @@ static int umichldap_gss_princ_to_ids(char *principal, uid_t *uid, gid_t *gid)
 	gid_t gd = -1;
 	int err = -EINVAL;
 
-	err = umich_name_to_id(principal, &id, &gd, "GSSAuthName", ldap_server,ldap_base);
+	err = umich_name_to_id(principal, &id, &gd,
+			attr_names.GSS_principal_attr, ldap_server,ldap_base);
 	if ((err < 0) && (memcmp(principal, "nfs/", 4) == 0)){
 		/* XXX: move this to svcgssd? */
 		err = name_to_nobody(&id, &gd);
@@ -314,7 +346,7 @@ umichldap_name_to_uid(char *name, uid_t *uid)
 {
 	gid_t gid;
 
-	return umich_name_to_id(name, uid, &gid, "NFSv4Name",
+	return umich_name_to_id(name, uid, &gid, attr_names.NFSv4_name_attr,
 					ldap_server, ldap_base);
 }
 
@@ -324,7 +356,7 @@ umichldap_name_to_gid(char *name, gid_t *gid)
 	uid_t uid;
 
 	/* XXX Is this really getting us a gid?? */
-	return umich_name_to_id(name, &uid, gid, "NFSv4Name",
+	return umich_name_to_id(name, &uid, gid, attr_names.NFSv4_name_attr,
 					ldap_server, ldap_base);
 }
 
@@ -348,7 +380,17 @@ umichldap_init(void)
 {
 	ldap_server = conf_get_str("UMICH_SCHEMA", "LDAP_server");
 	ldap_base = conf_get_str("UMICH_SCHEMA", "LDAP_base");
-	if (ldap_server == NULL || ldap_base == NULL) {
+	attr_names.NFSv4_name_attr
+		= conf_get_str("UMICH_SCHEMA", "NFSv4_name_attr");
+	attr_names.NFSv4_group_attr
+		= conf_get_str("UMICH_SCHEMA", "NFSv4_group_attr");
+	attr_names.GSS_principal_attr
+		= conf_get_str("UMICH_SCHEMA", "GSS_principal_attr");
+	if (ldap_server == NULL
+			|| ldap_base == NULL
+			|| attr_names.NFSv4_name_attr == NULL
+			|| attr_names.NFSv4_group_attr == NULL
+			|| attr_names.GSS_principal_attr == NULL) {
 		warnx("Error in translation table setup");
 		return -1;
 	}
