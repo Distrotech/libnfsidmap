@@ -43,13 +43,14 @@
 #include "cfg.h"
 #include "nfsidmap_internal.h"
 
-#define MAX_ATTR_LEN 15
+#define UMICH_OBJCLASS_REMOTE_PERSON "NFSv4RemotePerson"
+#define UMICH_OBJCLASS_REMOTE_GROUP  "NFSv4RemoteGroup"
 
 #ifndef LDAP_FILT_MAXSIZ
 #define LDAP_FILT_MAXSIZ        1024
 #endif
 
-static char nfs4name[MAX_ATTR_LEN + 1];
+/* Local structure definitions */
 
 struct attribute_names {
 	char *NFSv4_name_attr;
@@ -61,66 +62,16 @@ struct attr {
 	const char **u_attr[2];
 };
 
+/* GLOBAL data */
+
 char *ldap_server = NULL, *ldap_base = NULL;
 static struct attribute_names attr_names = {
 	.NFSv4_name_attr = NULL,
 };
 
-static char *get_NFSv4_name_attr(void)
-{
-	return attr_names.NFSv4_name_attr;
-}
+/* Local routines */
 
-static int get_NFSv4_name_attr_len(void)
-{
-	int len = strlen(attr_names.NFSv4_name_attr);
-
-	if (len > MAX_ATTR_LEN)
-		len = MAX_ATTR_LEN;
-	return len;
-}
-
-void
-init_u_attr(const char ***uattrs)
-{
-	static const char *__uattrs[2 + 1];
-
-	(*uattrs) = __uattrs;
-
-	(*uattrs)[0] = "uidNumber";
-	(*uattrs)[1] = "gidNumber";
-	(*uattrs)[2] = NULL;
-}
-
-void
-uattr_init(const char ***uattr)
-{
-	init_u_attr(&uattr[0]);
-	uattr[1] = NULL;
-}
-
-void
-init_n_attr(const char ***nattrs)
-{
-	static const char *__nattrs[1 + 1];
-	int len = get_NFSv4_name_attr_len();
-
-	(*nattrs) = __nattrs;
-
-	memcpy(nfs4name, get_NFSv4_name_attr(), len);
-	nfs4name[len] = '\0';
-	(*nattrs)[0] = nfs4name;
-	(*nattrs)[1] = NULL;
-}
-
-void
-nattr_init(const char ***nattr)
-{
-	init_n_attr(&nattr[0]);
-	nattr[1] = NULL;
-}
-
-int
+static int
 name_to_nobody(uid_t *uid, gid_t *gid)
 {
 	struct passwd   *pw = NULL;
@@ -132,7 +83,7 @@ name_to_nobody(uid_t *uid, gid_t *gid)
 	return 0;
 }
 
-int
+static int
 umich_name_to_ids(char *name, int idtype, uid_t *uid, gid_t *gid,
 		  char *attrtype, char *lserver, char *lbase)
 {
@@ -146,7 +97,7 @@ umich_name_to_ids(char *name, int idtype, uid_t *uid, gid_t *gid,
 	BerElement *ber = NULL;
 	char **idstr, filter[LDAP_FILT_MAXSIZ], base[LDAP_FILT_MAXSIZ];
 	struct attr uid_attr;
-	const char **attrs;
+	char *attrs[3];
 	char *attr_res;
 	int count = 0,  err, f_len, b_len;
 	int sizelimit = 1;
@@ -161,8 +112,10 @@ umich_name_to_ids(char *name, int idtype, uid_t *uid, gid_t *gid,
 
 	if (idtype == IDTYPE_USER) {
 		if (f_len = snprintf(filter, LDAP_FILT_MAXSIZ,
-			"(&(objectClass=NFSv4RemotePerson)(%s=%s))",
-			attrtype, name) == LDAP_FILT_MAXSIZ) {
+				     "(&(objectClass=%s)(%s=%s))",
+				     UMICH_OBJCLASS_REMOTE_PERSON,
+				     attrtype, name)
+				== LDAP_FILT_MAXSIZ) {
 			warnx("ERROR: umich_name_to_ids: filter too long!\n");
 			goto out;
 		}
@@ -174,8 +127,10 @@ umich_name_to_ids(char *name, int idtype, uid_t *uid, gid_t *gid,
 	}
 	else if (idtype == IDTYPE_GROUP) {
 		if (f_len = snprintf(filter, LDAP_FILT_MAXSIZ,
-			"(&(objectClass=NFSv4RemoteGroup)(%s=%s))",
-			attrtype, name) == LDAP_FILT_MAXSIZ) {
+				     "(&(objectClass=%s)(%s=%s))",
+				     UMICH_OBJCLASS_REMOTE_GROUP,
+				     attrtype, name)
+				== LDAP_FILT_MAXSIZ) {
 			warnx("ERROR: umich_name_to_ids: filter too long!\n");
 			goto out;
 		}
@@ -209,8 +164,10 @@ umich_name_to_ids(char *name, int idtype, uid_t *uid, gid_t *gid,
 		goto out;
 	}
 
-	uattr_init(uid_attr.u_attr);
-	attrs = uid_attr.u_attr[0];
+	attrs[0] = "uidNumber";
+	attrs[1] = "gidNumber";
+	attrs[2] = NULL;
+	
 	err = ldap_search_st(ld, base, LDAP_SCOPE_SUBTREE,
 			 filter, (char **)attrs,
 			 0, &timeout, &result);
@@ -268,7 +225,7 @@ out:
 	return err;
 }
 
-int
+static int
 umich_id_to_name(uid_t id, int idtype, char **name, size_t len,
 		 char *lserver, char *lbase)
 {
@@ -283,7 +240,7 @@ umich_id_to_name(uid_t id, int idtype, char **name, size_t len,
 	char **namestr, filter[LDAP_FILT_MAXSIZ], base[LDAP_FILT_MAXSIZ];
 	char idstr[16];
 	struct attr name_attr;
-	const char **attrs;
+	char *attrs[2];
 	char *attr_res;
 	int count = 0,  err, f_len, b_len;
 	int sizelimit = 1;
@@ -297,8 +254,9 @@ umich_id_to_name(uid_t id, int idtype, char **name, size_t len,
 
 	if (idtype == IDTYPE_USER) {
 		if (f_len = snprintf(filter, LDAP_FILT_MAXSIZ,
-			    "(&(objectClass=NFSv4RemotePerson)(uidNumber=%s))",
-			    idstr) == LDAP_FILT_MAXSIZ) {
+				     "(&(objectClass=%s)(uidNumber=%s))",
+				     UMICH_OBJCLASS_REMOTE_PERSON, idstr)
+			    	== LDAP_FILT_MAXSIZ) {
 			warnx("ERROR: umich_id_to_name: filter too long!\n");
 			goto out;
 		}
@@ -310,8 +268,9 @@ umich_id_to_name(uid_t id, int idtype, char **name, size_t len,
 
 	} else if (idtype == IDTYPE_GROUP) {
 		if (f_len = snprintf(filter, LDAP_FILT_MAXSIZ,
-			    "(&(objectClass=NFSv4RemoteGroup)(gidNumber=%s))",
-			    idstr) == LDAP_FILT_MAXSIZ) {
+				     "(&(objectClass=%s)(gidNumber=%s))",
+				     UMICH_OBJCLASS_REMOTE_GROUP, idstr)
+			    	== LDAP_FILT_MAXSIZ) {
 			warnx("ERROR: umich_id_to_name: filter too long!\n");
 			goto out;
 		}
@@ -345,8 +304,9 @@ umich_id_to_name(uid_t id, int idtype, char **name, size_t len,
 		goto out;
 	}
 
-	nattr_init(name_attr.u_attr);
-	attrs = name_attr.u_attr[0];
+	attrs[0] = attr_names.NFSv4_name_attr;
+	attrs[1] = NULL;
+
 	err = ldap_search_st(ld, base, LDAP_SCOPE_SUBTREE,
 			 filter, (char **)attrs,
 			 0, &timeout, &result);
@@ -389,7 +349,7 @@ out:
 	return err;
 }
 
-int
+static int
 umich_uid_to_grouplist(uid_t uid, gid_t *groups, int *ngroups,
 		       char *lserver, char *lbase)
 {
@@ -510,8 +470,9 @@ out:
  * principal:   krb5  - princ@realm, use KrbName ldap attribute
  *              spkm3 - X.509 dn, use X509Name ldap attribute
  */
-static int umichldap_gss_princ_to_ids(char *secname, char *principal,
-		uid_t *uid, gid_t *gid)
+static int
+umichldap_gss_princ_to_ids(char *secname, char *principal,
+			   uid_t *uid, gid_t *gid)
 {
 	uid_t rtnd_uid = -1;
 	gid_t rtnd_gid = -1;
@@ -622,6 +583,9 @@ umichldap_init(void)
 	}
 	return 0;
 }
+
+
+/* The external interface */
 
 struct trans_func umichldap_trans = {
 	.name		= "umich_ldap",
