@@ -1,3 +1,9 @@
+libnfsidmap (0.6-1) unstable; urgency=low
+
+  * fix debian/copyright
+
+ -- J. Bruce Fields <bfields@fieldses.org>  Sun, 14 Nov 2004 14:01:52 -0500
+
 libnfsidmap (0.5-1) unstable; urgency=low
 
   * fix nfs4_gss_get_princ_ids
