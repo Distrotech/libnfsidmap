@@ -46,33 +46,22 @@
 #include <netdb.h>
 #include <err.h>
 #include "nfsidmap.h"
+#include "nfsidmap_internal.h"
 #include "cfg.h"
 
-/* For now these are all just wrappers around getpwnam and friends;
- * we tack on the given domain to the results of getpwnam when looking up a uid,
- * and ignore the domain entirely when looking up a name.
- *
- * But the plan is to make more use of the domain in future.  E.g., consult
- * user-provided mapping from sets of domains to mapping mechanisms specified
- * possibly as follows:
- *
- * 	braindead.org: systemuid
- * 	*.citi.umich.edu,citi.umich.edu: system
- * 	*.umich.edu,umich.edu: ldap(some options here?)
- * 	*: nobody(nobody,nogroup)
- *
- * So braindead.org uses names that are of the form uid@braindead.org, whereas
- * citi machines just use getpwnam, other umich machines use ldap, and
- * everybody else uses a constant mapping.
- */
+/* forward declarations */
+int set_trans_method(int);
 
 static char *default_domain;
+
+static int method;
 
 #ifndef PATH_IDMAPDCONF
 #define PATH_IDMAPDCONF "/etc/idmapd.conf"
 #endif
 
 static char *conf_path = PATH_IDMAPDCONF;
+static int initialized = 0;
 
 static int domain_from_dns(char **domain)
 {
@@ -89,10 +78,15 @@ static int domain_from_dns(char **domain)
 	return 0;
 }
 
+static struct trans_func *trans;
+
 int nfs4_init_name_mapping(char *conffile)
 {
 	int ret;
 
+	/* XXX: need to be able to reload configurations... */
+	if (initialized == 1)
+		return 0;
 	if (conffile)
 		conf_path = conffile;
 	conf_init();
@@ -105,10 +99,23 @@ int nfs4_init_name_mapping(char *conffile)
 			return ret;
 		}
 	}
+	method = conf_get_num("Translation", "Method", TR_NSS);
+	if (set_trans_method(method) == -1) {
+		warnx("Error in translation table setup");
+		return -1;
+	}
+
+	if (trans->init) {
+		ret = trans->init();
+		if (ret)
+			return ret;
+	}
+	initialized = 1;
+
 	return 0;
 }
 
-static char * get_default_domain(void)
+char * get_default_domain(void)
 {
 	int ret;
 
@@ -123,138 +130,46 @@ static char * get_default_domain(void)
 	return default_domain;
 }
 
-static int write_name(char *dest, char *localname, char *domain, size_t len)
+extern struct trans_func nss_trans;
+extern struct trans_func umichldap_trans;
+
+static struct trans_func * t_array[TR_SIZE + 1] = {
+	[TR_NSS] = &nss_trans,
+	[TR_UMICH_SCHEMA] = &umichldap_trans,
+	[TR_SIZE] = NULL,
+};
+
+int
+set_trans_method(int method)
 {
-	if (strlen(localname) + 1 + strlen(domain) + 1 > len) {
-		return -ENOMEM; /* XXX: Is there an -ETOOLONG? */
+	if (method > -1 && method < TR_SIZE) {
+		trans = t_array[method];
+		return 0;
 	}
-	strcpy(dest, localname);
-	strcat(dest, "@");
-	strcat(dest, domain);
-	return 0;
+	return -1;
 }
 
 int nfs4_uid_to_name(uid_t uid, char *domain, char *name, size_t len)
 {
-	struct passwd *pw = NULL;
-	struct passwd pwbuf;
-	char *buf;
-	size_t buflen = sysconf(_SC_GETPW_R_SIZE_MAX);
-	int err = -ENOMEM;
-
-	buf = malloc(buflen);
-	if (!buf)
-		goto out;
-	if (domain == NULL)
-		domain = get_default_domain();
-	err = -getpwuid_r(uid, &pwbuf, buf, buflen, &pw);
-	if (pw == NULL)
-		err = -ENOENT;
-	if (err)
-		goto out_buf;
-	err = write_name(name, pw->pw_name, domain, len);
-out_buf:
-	free(buf);
-out:
-	return err;
+	return trans->uid_to_name(uid, domain, name, len);
 }
 
 int nfs4_gid_to_name(gid_t gid, char *domain, char *name, size_t len)
 {
-	struct group *gr = NULL;
-	struct group grbuf;
-	char *buf;
-	size_t buflen = sysconf(_SC_GETGR_R_SIZE_MAX);
-	int err = -ENOMEM;
-
-	buf = malloc(buflen);
-	if (!buf)
-		goto out;
-	if (domain == NULL)
-		domain = get_default_domain();
-	err = -getgrgid_r(gid, &grbuf, buf, buflen, &gr);
-	if (gr == NULL)
-		err = -ENOENT;
-	if (err)
-		goto out_buf;
-	err = write_name(name, gr->gr_name, domain, len);
-out_buf:
-	free(buf);
-out:
-	return err;
-}
-
-static char *strip_domain(char *name, char *domain)
-{
-	char *c, *l;
-	int len;
-
-	c = strchr(name, '@');
-	if (!c)
-		return NULL;
-	if (strcmp(c + 1, domain) != 0)
-		return NULL;
-	len = c - name;
-	l = malloc(index + 1);
-	memcpy(l, name, len);
-	l[len] = '\0';
-	return l;
+	return trans->gid_to_name(gid, domain, name, len);
 }
 
 int nfs4_name_to_uid(char *name, uid_t *uid)
 {
-	struct passwd *pw = NULL;
-	struct passwd pwbuf;
-	char *buf, *localname, *domain;
-	size_t buflen = sysconf(_SC_GETPW_R_SIZE_MAX);
-	int err = -ENOMEM;
-
-	buf = malloc(buflen);
-	if (!buf)
-		goto out;
-	domain = get_default_domain();
-	localname = strip_domain(name, domain);
-	if (!localname)
-		goto out_buf;
-	err = -getpwnam_r(localname, &pwbuf, buf, buflen, &pw);
-	if (pw == NULL)
-		err = -ENOENT;
-	if (err)
-		goto out_name;
-	*uid = pw->pw_uid;
-out_name:
-	free(localname);
-out_buf:
-	free(buf);
-out:
-	return err;
+	return trans->name_to_uid(name, uid);
 }
 
 int nfs4_name_to_gid(char *name, gid_t *gid)
 {
-	struct group *gr = NULL;
-	struct group grbuf;
-	char *buf, *localname, *domain;
-	size_t buflen = sysconf(_SC_GETGR_R_SIZE_MAX);
-	int err = -ENOMEM;;
+	return trans->name_to_gid(name, gid);
+}
 
-	buf = malloc(buflen);
-	if (!buf)
-		goto out;
-	domain = get_default_domain();
-	localname = strip_domain(name, domain);
-	if (!localname)
-		goto out_buf;
-	err = -getgrnam_r(localname, &grbuf, buf, buflen, &gr);
-	if (gr == NULL)
-		err = -ENOENT;
-	if (err)
-		goto out_name;
-	*gid = gr->gr_gid;
-out_name:
-	free(localname);
-out_buf:
-	free(buf);
-out:
-	return err;
+int nfs4_gss_princ_to_ids(char *princ, uid_t *uid, gid_t *gid)
+{
+	return trans->princ_to_ids(princ, uid, gid);
 }
