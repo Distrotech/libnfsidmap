@@ -43,6 +43,7 @@
 #include <string.h>
 #include <pwd.h>
 #include <grp.h>
+#include "nfsidmap.h"
 
 /* For now these are all just wrappers around getpwnam and friends;
  * we tack on the given domain to the results of getpwnam when looking up a uid,
@@ -85,6 +86,8 @@ int nfs4_uid_to_name(uid_t uid, char *domain, char *name, size_t len)
 	if (!buf)
 		goto out;
 	err = -getpwuid_r(uid, &pwbuf, buf, buflen, &pw);
+	if (pw == NULL)
+		err = -ENOENT;
 	if (err)
 		goto out_buf;
 	err = write_name(name, pw->pw_name, domain, len);
@@ -106,6 +109,8 @@ int nfs4_gid_to_name(gid_t gid, char *domain, char *name, size_t len)
 	if (!buf)
 		goto out;
 	err = -getgrgid_r(gid, &grbuf, buf, buflen, &gr);
+	if (gr == NULL)
+		err = -ENOENT;
 	if (err)
 		goto out_buf;
 	err = write_name(name, gr->gr_name, domain, len);
@@ -147,6 +152,8 @@ int nfs4_name_to_uid(char *name, uid_t *uid)
 	if (!localname)
 		goto out_buf;
 	err = -getpwnam_r(name, &pwbuf, buf, buflen, &pw);
+	if (pw == NULL)
+		err = -ENOENT;
 	if (err)
 		goto out_name;
 	*uid = pw->pw_uid;
@@ -173,6 +180,8 @@ int nfs4_name_to_gid(char *name, gid_t *gid)
 	if (!localname)
 		goto out_buf;
 	err = -getgrnam_r(name, &grbuf, buf, buflen, &gr);
+	if (gr == NULL)
+		err = -ENOENT;
 	if (err)
 		goto out_name;
 	*gid = gr->gr_gid;
