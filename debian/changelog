@@ -1,3 +1,15 @@
+libnfsidmap (0.5-1) unstable; urgency=low
+
+  * fix nfs4_gss_get_princ_ids
+
+ -- J. Bruce Fields <bfields@fieldses.org>  Thu, 21 Oct 2004 20:44:37 -0400
+
+libnfsidmap (0.4-1) unstable; urgency=low
+
+  * bugfixes
+
+ -- J. Bruce Fields <bfields@fieldses.org>  Thu, 21 Oct 2004 20:43:09 -0400
+
 libnfsidmap (0.3-1) unstable; urgency=low
 
   * umich ldap schema support
