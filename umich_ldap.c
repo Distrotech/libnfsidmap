@@ -489,6 +489,7 @@ umich_gss_princ_to_grouplist(char *principal, gid_t *groups, int *ngroups,
 		err = -EINVAL;
 		goto out_unbind;
 	}
+	*ngroups = count;
 
 	curr_group = groups;
 
@@ -531,8 +532,9 @@ umichldap_gss_princ_to_ids(char *secname, char *principal,
 	gid_t rtnd_gid = -1;
 	int err = -EINVAL;
 
-	if (strcmp(secname, "krb5") != 0) {
-		warnx("ERROR: umichldap_gss_princ_to_ids: invalid secname '%s'\n", secname);
+	if ((strcmp(secname, "krb5") != 0) && (strcmp(secname, "spkm3") != 0)) {
+		warnx("ERROR: umichldap_gss_princ_to_ids: "
+		      "invalid secname '%s'\n", secname);
 		return err;
 	}
 
@@ -594,8 +596,7 @@ umichldap_gss_princ_to_grouplist(char *secname, char *principal,
 	gid_t rtnd_gid = -1;
 	int err = -EINVAL;
 
-	/* XXX Is this check necessary??? */
-	if (strcmp(secname, "krb5") != 0) {
+	if ((strcmp(secname, "krb5") != 0) && (strcmp(secname, "spkm3") != 0)) {
 		warnx("ERROR: umichldap_gss_princ_to_grouplist: "
 		      "invalid secname '%s'\n", secname);
 		return err;
