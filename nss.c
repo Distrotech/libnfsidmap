@@ -119,48 +119,74 @@ out:
 
 /* XXX: actually should return error, so can distinguish between
  * memory allocation failure and failure to match domain */
-static char *strip_domain(const char *name, char *domain)
+static char *strip_domain(const char *name, const char *domain)
 {
-	char *c, *l;
+	const char *c;
+	char *l = NULL;
 	int len;
 
 	c = strchr(name, '@');
 	if (!c)
-		return NULL;
+		goto out;
 	if (domain && strcmp(c + 1, domain) != 0)
-		return NULL;
+		goto out;
 	len = c - name;
 	l = malloc(len + 1);
+	if (l == NULL)
+		goto out;
 	memcpy(l, name, len);
 	l[len] = '\0';
+out:
 	return l;
+}
+
+struct pwbuf {
+	struct passwd pwbuf;
+	char buf[1];
+};
+
+static struct passwd *nss_getpwnam(const char *name, const char *domain, int *err_p)
+{
+	struct passwd *pw;
+	struct pwbuf *buf;
+	size_t buflen = sysconf(_SC_GETPW_R_SIZE_MAX);
+	char *localname;
+	int err = ENOMEM;
+
+	buf = malloc(sizeof(*buf) + buflen);
+	if (buf == NULL)
+		goto err;
+
+	err = EINVAL;
+	localname = strip_domain(name, domain);
+	if (localname == NULL)
+		goto err_free_buf;
+
+	err = getpwnam_r(localname, &buf->pwbuf, buf->buf, buflen, &pw);
+	free(localname);
+	if (err == 0) {
+		*err_p = 0;
+		return &buf->pwbuf;
+	}
+err_free_buf:
+	free(buf);
+err:
+	*err_p = -err;
+	return NULL;
 }
 
 static int nss_name_to_uid(char *name, uid_t *uid)
 {
 	struct passwd *pw = NULL;
-	struct passwd pwbuf;
-	char *buf, *localname, *domain;
-	size_t buflen = sysconf(_SC_GETPW_R_SIZE_MAX);
-	int err = -ENOMEM;
+	char *domain;
+	int err = -EINVAL;
 
-	buf = malloc(buflen);
-	if (!buf)
-		goto out;
 	domain = get_default_domain();
-	localname = strip_domain(name, domain);
-	if (!localname)
-		goto out_buf;
-	err = -getpwnam_r(localname, &pwbuf, buf, buflen, &pw);
+	pw = nss_getpwnam(name, domain, &err);
 	if (pw == NULL)
-		err = -ENOENT;
-	if (err)
-		goto out_name;
+		goto out;
 	*uid = pw->pw_uid;
-out_name:
-	free(localname);
-out_buf:
-	free(buf);
+	free(pw);
 out:
 	return err;
 }
@@ -171,11 +197,12 @@ static int nss_name_to_gid(char *name, gid_t *gid)
 	struct group grbuf;
 	char *buf, *localname, *domain;
 	size_t buflen = sysconf(_SC_GETGR_R_SIZE_MAX);
-	int err = -ENOMEM;;
+	int err = -ENOMEM;
 
 	buf = malloc(buflen);
 	if (!buf)
 		goto out;
+	err = -EINVAL;
 	domain = get_default_domain();
 	localname = strip_domain(name, domain);
 	if (!localname)
@@ -197,44 +224,38 @@ out:
 static int nss_gss_princ_to_ids(char *secname, char *princ,
 		uid_t *uid, uid_t *gid)
 {
-	char *localprinc;
-	struct passwd   *pw = NULL;
+	struct passwd *pw;
+	int err = 0;
 
 	if (strcmp(secname, "krb5") != 0)
 		return -EINVAL;
 	/* XXX: not quite right?  Need to know default realm? */
-	localprinc = strip_domain(princ, NULL);
-	if (!localprinc)
-		return -EINVAL;
-	/* XXX: shouldn't be hardwiring nfs/: */
-	/* XXX: temporarily disable nfs/ check for Solaris testing */
-	if (!(pw = getpwnam(localprinc)) && !(pw = getpwnam("nobody")))
-		return -1;
+	pw = nss_getpwnam(princ, NULL, &err);
+	if (pw == NULL)
+		goto out;
 	*uid = pw->pw_uid;
 	*gid = pw->pw_gid;
-	return 0;
+	free(pw);
+out:
+	return err;
 }
 
 int nss_gss_princ_to_grouplist(char *secname, char *princ,
 		gid_t *groups, int *ngroups)
 {
-	int ret;
 	struct passwd *pw;
-	char *localprinc;
+	int ret = -EINVAL;
 
 	if (strcmp(secname, "krb5") != 0)
-		return -EINVAL;
+		goto out;
 	/* XXX: not quite right?  Need to know default realm? */
-	localprinc = strip_domain(princ, NULL);
-	if (!localprinc)
-		return -EINVAL;
-	pw = getpwnam(localprinc);
+	pw = nss_getpwnam(princ, NULL, &ret);
 	if (pw == NULL)
-		return -EINVAL;
-
-	ret = getgrouplist(localprinc, pw->pw_gid, groups, ngroups);
-	if (ret < 0)
-		return -ERANGE;
+		goto out;
+	if (getgrouplist(pw->pw_name, pw->pw_gid, groups, ngroups) < 0)
+		ret = -ERANGE;
+	free(pw);
+out:
 	return ret;
 }
 

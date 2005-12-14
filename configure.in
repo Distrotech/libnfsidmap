@@ -2,9 +2,9 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ(2.59)
-AC_INIT(libnfsidmap.c)
+AC_INIT(libnfsidmap, 0.12, nfsv4-wg@citi.umich.edu)
 AC_CONFIG_SRCDIR([nfsidmap.h])
-AM_INIT_AUTOMAKE(nfsidmap, 0.1)
+AM_INIT_AUTOMAKE
 AM_PROG_LIBTOOL
 
 # Checks for programs.

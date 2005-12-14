@@ -32,16 +32,18 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <stdio.h>
-#include <stdlib.h>
 #include <sys/types.h>
 #include <errno.h>
-#include <pwd.h>
-#include <ldap.h>
+#include <unistd.h>
+#include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
+#include <limits.h>
+#include <pwd.h>
 #include <err.h>
-#include "cfg.h"
+#include <ldap.h>
 #include "nfsidmap_internal.h"
+#include "cfg.h"
 
 #define UMICH_OBJCLASS_REMOTE_PERSON "NFSv4RemotePerson"
 #define UMICH_OBJCLASS_REMOTE_GROUP  "NFSv4RemoteGroup"
@@ -197,14 +199,41 @@ umich_name_to_ids(char *name, int idtype, uid_t *uid, gid_t *gid,
 	for (attr_res = ldap_first_attribute(ld, result, &ber);
 	     attr_res != NULL;
 	     attr_res = ldap_next_attribute(ld, result, ber)) {
+
+		unsigned long tmp_u, tmp_g;
+		uid_t tmp_uid;
+		gid_t tmp_gid;
+
 		if (!(idstr = ldap_get_values(ld, result, attr_res))) {
 			ldap_perror(ld, "ldap_get_values\n");
 			goto out_memfree;
 		}
 		if (strcasecmp(attr_res, "uidNumber") == 0) {
-			*uid = atoi(*idstr);
+			tmp_u = strtoul(*idstr, (char **)NULL, 10);
+			tmp_uid = tmp_u;
+			if (tmp_uid != tmp_u ||
+				(errno == ERANGE && tmp_u == ULONG_MAX)) {
+				warnx("ERROR: umich_name_to_ids: "
+				      "uidNumber too long converting '%s'\n",
+				      *idstr);
+				ldap_memfree(attr_res);
+				ldap_value_free(idstr);
+				goto out_memfree;
+			}
+			*uid = tmp_uid;
 		} else if (strcasecmp(attr_res, "gidNumber") == 0) {
-			*gid = atoi(*idstr);
+			tmp_g = strtoul(*idstr, (char **)NULL, 10);
+			tmp_gid = tmp_g;
+			if (tmp_gid != tmp_g ||
+				(errno == ERANGE && tmp_g == ULONG_MAX)) {
+				warnx("ERROR: umich_name_to_ids: "
+				      "gidNumber too long converting '%s'\n",
+				      *idstr);
+				ldap_memfree(attr_res);
+				ldap_value_free(idstr);
+				goto out_memfree;
+			}
+			*gid = tmp_gid;
 		} else {
 			warnx("umich_name_to_ids: received attr '%s' ???\n",
 				attr_res);
@@ -500,6 +529,8 @@ umich_gss_princ_to_grouplist(char *principal, gid_t *groups, int *ngroups,
 
 		char **vals;
 		int valcount;
+		unsigned long tmp_g;
+		gid_t tmp_gid;
 
 		vals = ldap_get_values(ld, entry, "gidNumber");
 
@@ -509,7 +540,16 @@ umich_gss_princ_to_grouplist(char *principal, gid_t *groups, int *ngroups,
 			      "posixGroup! (count was %d)\n", valcount);
 			goto out_unbind;
 		}
-		*curr_group++ = atoi(vals[0]);
+		tmp_g = strtoul(vals[0], (char **)NULL, 10);
+		tmp_gid = tmp_g;
+		if (tmp_gid != tmp_g ||
+				(errno == ERANGE && tmp_g == ULONG_MAX)) {
+			warnx("ERROR: umich_gss_princ_to_grouplist: "
+			      "gidNumber too long converting '%s'\n", vals[0]);
+			ldap_value_free(vals);
+			goto out_unbind;
+		}
+		*curr_group++ = tmp_gid;
 		ldap_value_free(vals);
 	}
 	err = 0;
