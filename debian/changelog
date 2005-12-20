@@ -1,3 +1,19 @@
+libnfsidmap (0.12-1) unstable; urgency=low
+
+  * new "upstream"
+
+ -- J. Bruce Fields <bfields@fieldses.org>  Mon, 19 Dec 2005 17:57:44 -0500
+
+libnfsidmap (0.10-1) unstable; urgency=low
+
+  * kwc: Fix supplemental groups code to expect memberUid to contain uid
+    and not uidNumber
+  * kwc: Separate id_to_name lookups between user and group
+    using different search filters and bases
+  * kwc: Use stack space rather than mallocs for filters and base
+
+ -- J. Bruce Fields <bfields@fieldses.org>  Thu, 13 Jan 2005 16:30:17 -0500
+
 libnfsidmap (0.8-1) unstable; urgency=low
 
   * kwc: separate user lookups from group lookups using different search
