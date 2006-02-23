@@ -64,11 +64,28 @@ struct attr {
 	const char **u_attr[2];
 };
 
+struct umich_ldap_info {
+	char *server;		/* server name/address */
+	int  port;		/* server port */
+	char *base;		/* base DN */
+	char *people_tree;	/* DN to start searches for people */
+	char *group_tree;	/* DN to start searches for groups */
+};
+
 /* GLOBAL data */
 
-char *ldap_server = NULL, *ldap_base = NULL;
+static struct umich_ldap_info ldap_info = {
+	.server = NULL,
+	.port = 0,
+	.base = NULL,
+	.people_tree = NULL,
+	.group_tree = NULL,
+};
+
 static struct attribute_names attr_names = {
 	.NFSv4_name_attr = NULL,
+	.NFSv4_group_attr = NULL,
+	.GSS_principal_attr = NULL,
 };
 
 /* Local routines */
@@ -87,17 +104,16 @@ name_to_nobody(uid_t *uid, gid_t *gid)
 
 static int
 umich_name_to_ids(char *name, int idtype, uid_t *uid, gid_t *gid,
-		  char *attrtype, char *lserver, char *lbase)
+		  char *attrtype, struct umich_ldap_info *linfo)
 {
 	int m_id;
 	LDAP *ld = NULL;
-	int port = LDAP_PORT;
 	struct timeval timeout = {
 		.tv_sec = 2,
 	};
 	LDAPMessage *result, *entry;
 	BerElement *ber = NULL;
-	char **idstr, filter[LDAP_FILT_MAXSIZ], base[LDAP_FILT_MAXSIZ];
+	char **idstr, filter[LDAP_FILT_MAXSIZ], *base;
 	struct attr uid_attr;
 	char *attrs[3];
 	char *attr_res;
@@ -106,7 +122,8 @@ umich_name_to_ids(char *name, int idtype, uid_t *uid, gid_t *gid,
 
 	err = -EINVAL;
 	if (uid == NULL || gid == NULL || name == NULL || 
-	    attrtype == NULL || lserver == NULL || lbase == NULL)
+	    attrtype == NULL || linfo == NULL || linfo->server == NULL ||
+	    linfo->people_tree == NULL || linfo->group_tree == NULL)
 		goto out;
 
 	*uid = -1;
@@ -121,11 +138,7 @@ umich_name_to_ids(char *name, int idtype, uid_t *uid, gid_t *gid,
 			warnx("ERROR: umich_name_to_ids: filter too long!\n");
 			goto out;
 		}
-		if (b_len = snprintf(base, LDAP_FILT_MAXSIZ, "%s,%s",
-				"ou=People", lbase) == LDAP_FILT_MAXSIZ) {
-			warnx("ERROR: umich_name_to_ids: base too long!\n");
-			goto out;
-		}
+		base = linfo->people_tree;
 	}
 	else if (idtype == IDTYPE_GROUP) {
 		if (f_len = snprintf(filter, LDAP_FILT_MAXSIZ,
@@ -136,11 +149,7 @@ umich_name_to_ids(char *name, int idtype, uid_t *uid, gid_t *gid,
 			warnx("ERROR: umich_name_to_ids: filter too long!\n");
 			goto out;
 		}
-		if (b_len = snprintf(base, LDAP_FILT_MAXSIZ, "%s,%s",
-				"ou=Groups", lbase) == LDAP_FILT_MAXSIZ) {
-			warnx("ERROR: umich_name_to_ids: base too long!\n");
-			goto out;
-		}
+		base = linfo->group_tree;
 	}
 	else {
 		warnx("ERROR: umich_name_to_ids: invalid idtype (%d)\n",
@@ -148,8 +157,9 @@ umich_name_to_ids(char *name, int idtype, uid_t *uid, gid_t *gid,
 		goto out;
 	}
 
-	if (!(ld = ldap_init(lserver, port))) {
-		warnx("ldap_init failed to [%s:%d]\n", lserver, port);
+	if (!(ld = ldap_init(linfo->server, linfo->port))) {
+		warnx("ldap_init failed to [%s:%d]\n",
+			linfo->server, linfo->port);
 		goto out;
 	}
 
@@ -256,17 +266,16 @@ out:
 
 static int
 umich_id_to_name(uid_t id, int idtype, char **name, size_t len,
-		 char *lserver, char *lbase)
+		 struct umich_ldap_info *linfo)
 {
 	int m_id;
 	LDAP *ld = NULL;
-	int port = LDAP_PORT;
 	struct timeval timeout = {
 		.tv_sec = 2,
 	};
 	LDAPMessage *result, *entry;
 	BerElement *ber;
-	char **namestr, filter[LDAP_FILT_MAXSIZ], base[LDAP_FILT_MAXSIZ];
+	char **namestr, filter[LDAP_FILT_MAXSIZ], *base;
 	char idstr[16];
 	struct attr name_attr;
 	char *attrs[2];
@@ -275,7 +284,8 @@ umich_id_to_name(uid_t id, int idtype, char **name, size_t len,
 	int sizelimit = 1;
 
 	err = -EINVAL;
-	if (lserver == NULL || lbase == NULL || name == NULL)
+	if (name == NULL || linfo == NULL || linfo->server == NULL || 
+		linfo->people_tree == NULL || linfo->group_tree == NULL)
 		goto out;
 
 	snprintf(idstr, sizeof(idstr), "%d", id);
@@ -289,12 +299,7 @@ umich_id_to_name(uid_t id, int idtype, char **name, size_t len,
 			warnx("ERROR: umich_id_to_name: filter too long!\n");
 			goto out;
 		}
-		if (b_len = snprintf(base, LDAP_FILT_MAXSIZ, "%s,%s",
-				"ou=People", lbase) == LDAP_FILT_MAXSIZ) {
-			warnx("ERROR: umich_id_to_name: base too long!\n");
-			goto out;
-		}
-
+		base = linfo->people_tree;
 	} else if (idtype == IDTYPE_GROUP) {
 		if (f_len = snprintf(filter, LDAP_FILT_MAXSIZ,
 				     "(&(objectClass=%s)(gidNumber=%s))",
@@ -303,20 +308,16 @@ umich_id_to_name(uid_t id, int idtype, char **name, size_t len,
 			warnx("ERROR: umich_id_to_name: filter too long!\n");
 			goto out;
 		}
-		if (b_len = snprintf(base, LDAP_FILT_MAXSIZ, "%s,%s",
-				"ou=Groups", lbase) == LDAP_FILT_MAXSIZ) {
-			warnx("ERROR: umich_id_to_name: base too long!\n");
-			goto out;
-		}
-
+		base = linfo->group_tree;
 	} else {
 		warnx("ERROR: umich_id_to_name: invalid idtype (%d)\n", idtype);
 		err = -EINVAL;
 		goto out;
 	}
 
-	if (!(ld = ldap_init(lserver, port))) {
-		warnx("ldap_init failed to [%s:%d]\n", lserver, port);
+	if (!(ld = ldap_init(linfo->server, linfo->port))) {
+		warnx("ldap_init failed to [%s:%d]\n",
+			linfo->server, linfo->port);
 		goto out;
 	}
 
@@ -380,16 +381,15 @@ out:
 
 static int
 umich_gss_princ_to_grouplist(char *principal, gid_t *groups, int *ngroups,
-			     char *lserver, char *lbase)
+			     struct umich_ldap_info *linfo)
 {
 	int m_id;
 	LDAP *ld = NULL;
-	int port = LDAP_PORT;
 	struct timeval timeout = {
 		.tv_sec = 2,
 	};
 	LDAPMessage *result, *entry;
-	char **namestr, filter[LDAP_FILT_MAXSIZ], base[LDAP_FILT_MAXSIZ];
+	char **namestr, filter[LDAP_FILT_MAXSIZ];
 	char uidstr[16];
 	struct attr name_attr;
 	char *attrs[2];
@@ -397,12 +397,14 @@ umich_gss_princ_to_grouplist(char *principal, gid_t *groups, int *ngroups,
 	gid_t *curr_group;
 
 	err = -EINVAL;
-	if (lserver == NULL || lbase == NULL)
+	if (linfo == NULL || linfo->server == NULL ||
+		linfo->people_tree == NULL || linfo->group_tree == NULL)
 		goto out;
 
 
-	if (!(ld = ldap_init(lserver, port))) {
-		warnx("ldap_init failed to [%s:%d]\n", lserver, port);
+	if (!(ld = ldap_init(linfo->server, linfo->port))) {
+		warnx("ldap_init failed to [%s:%d]\n",
+			linfo->server, linfo->port);
 		goto out;
 	}
 
@@ -432,16 +434,10 @@ umich_gss_princ_to_grouplist(char *principal, gid_t *groups, int *ngroups,
 		goto out;
 	}
 
-	if (b_len = snprintf(base, LDAP_FILT_MAXSIZ, "%s,%s",
-			"ou=People", lbase) == LDAP_FILT_MAXSIZ) {
-		warnx("ERROR: umich_gss_princ_to_grouplist: base too long!\n");
-		goto out;
-	}
-
 	attrs[0] = "uid";
 	attrs[1] = NULL;
 
-	err = ldap_search_st(ld, base, LDAP_SCOPE_SUBTREE,
+	err = ldap_search_st(ld, linfo->people_tree, LDAP_SCOPE_SUBTREE,
 			 filter, attrs,
 			 0, &timeout, &result);
 	if (err < 0 ) {
@@ -480,16 +476,10 @@ umich_gss_princ_to_grouplist(char *principal, gid_t *groups, int *ngroups,
 		goto out_unbind;
 	}
 
-	if (b_len = snprintf(base, LDAP_FILT_MAXSIZ, "%s,%s",
-			"ou=Groups", lbase) == LDAP_FILT_MAXSIZ) {
-		warnx("ERROR: umich_gss_princ_to_grouplist: base too long!\n");
-		goto out_unbind;
-	}
-
 	attrs[0] = "gidNumber";
 	attrs[1] = NULL;
 
-	err = ldap_search_st(ld, base, LDAP_SCOPE_SUBTREE,
+	err = ldap_search_st(ld, linfo->group_tree, LDAP_SCOPE_SUBTREE,
 			 filter, attrs,
 			 0, &timeout, &result);
 	if (err < 0 ) {
@@ -579,7 +569,7 @@ umichldap_gss_princ_to_ids(char *secname, char *principal,
 	}
 
 	err = umich_name_to_ids(principal, IDTYPE_USER, &rtnd_uid, &rtnd_gid,
-			attr_names.GSS_principal_attr, ldap_server,ldap_base);
+			attr_names.GSS_principal_attr, &ldap_info);
 	/*
 	 * If no mapping in LDAP, but name starts with "nfs/*",
 	 * then map to nobody
@@ -601,8 +591,8 @@ umichldap_name_to_uid(char *name, uid_t *uid)
 {
 	gid_t gid;
 
-	return umich_name_to_ids(name, IDTYPE_USER, uid, &gid, attr_names.NFSv4_name_attr,
-					ldap_server, ldap_base);
+	return umich_name_to_ids(name, IDTYPE_USER, uid,
+				 &gid, attr_names.NFSv4_name_attr, &ldap_info);
 }
 
 static int
@@ -610,22 +600,20 @@ umichldap_name_to_gid(char *name, gid_t *gid)
 {
 	uid_t uid;
 
-	return umich_name_to_ids(name, IDTYPE_GROUP, &uid, gid, attr_names.NFSv4_group_attr,
-					ldap_server, ldap_base);
+	return umich_name_to_ids(name, IDTYPE_GROUP, &uid, gid,
+				 attr_names.NFSv4_group_attr, &ldap_info);
 }
 
 static int
 umichldap_uid_to_name(uid_t uid, char *domain, char *name, size_t len)
 {
-	return umich_id_to_name(uid, IDTYPE_USER, &name, len,
-					ldap_server, ldap_base);
+	return umich_id_to_name(uid, IDTYPE_USER, &name, len, &ldap_info);
 }
 
 static int
 umichldap_gid_to_name(gid_t gid, char *domain, char *name, size_t len)
 {
-	return umich_id_to_name(gid, IDTYPE_GROUP, &name, len,
-					ldap_server, ldap_base);
+	return umich_id_to_name(gid, IDTYPE_GROUP, &name, len, &ldap_info);
 }
 
 static int
@@ -643,30 +631,80 @@ umichldap_gss_princ_to_grouplist(char *secname, char *principal,
 	}
 
 	return umich_gss_princ_to_grouplist(principal, groups, ngroups,
-					    ldap_server, ldap_base);
+					    &ldap_info);
 }
 
 
 static int
 umichldap_init(void)
 {
-	ldap_server = conf_get_str("UMICH_SCHEMA", "LDAP_server");
-	ldap_base = conf_get_str("UMICH_SCHEMA", "LDAP_base");
+	char base[LDAP_FILT_MAXSIZ];
+	int len;
+	char *tp, *tg;
+
+	ldap_info.server = conf_get_str("UMICH_SCHEMA", "LDAP_server");
+	ldap_info.base = conf_get_str("UMICH_SCHEMA", "LDAP_base");
+	ldap_info.port = conf_get_num("UMICH_SCHEMA", "LDAP_port", LDAP_PORT);
+	tp = conf_get_str("UMICH_SCHEMA", "LDAP_people_subtree");
+	tg = conf_get_str("UMICH_SCHEMA", "LDAP_group_subtree");
+
 	attr_names.NFSv4_name_attr
 		= conf_get_str("UMICH_SCHEMA", "NFSv4_name_attr");
 	attr_names.NFSv4_group_attr
 		= conf_get_str("UMICH_SCHEMA", "NFSv4_group_attr");
 	attr_names.GSS_principal_attr
 		= conf_get_str("UMICH_SCHEMA", "GSS_principal_attr");
-	if (ldap_server == NULL
-			|| ldap_base == NULL
+	if (ldap_info.server == NULL
+			|| ldap_info.base == NULL
 			|| attr_names.NFSv4_name_attr == NULL
 			|| attr_names.NFSv4_group_attr == NULL
 			|| attr_names.GSS_principal_attr == NULL) {
 		warnx("Error in translation table setup");
-		return -1;
+		goto fail;
+	}
+	/*
+	 * If people or group subtree was specified without
+	 * specifying a value, just use the base value.
+	 * If not specified at all, use the default.
+	 * Otherwise, use what was specified.
+	 */
+	if (tp != NULL && strlen(tp) == 0) {
+		if ((ldap_info.people_tree = strdup(ldap_info.base)) == NULL) {
+			warnx("Error duplicating base for people base");
+			goto fail;
+		}
+	} else {
+		if ((len = snprintf(base, LDAP_FILT_MAXSIZ, "%s,%s",
+			(tp ? tp : "ou=People"), ldap_info.base))
+						== LDAP_FILT_MAXSIZ) {
+			warnx("Error forming people base");
+			goto fail;
+		}
+		if ((ldap_info.people_tree = strdup(base)) == NULL) {
+			warnx("Error duplicating people base");
+			goto fail;
+		}
+	}
+	if (tg != NULL && strlen(tg) == 0) {
+		if ((ldap_info.group_tree = strdup(ldap_info.base)) == NULL) {
+			warnx("Error duplicating base for group base");
+			goto fail;
+		}
+	} else {
+		if ((len = snprintf(base, LDAP_FILT_MAXSIZ, "%s,%s",
+			(tg ? tg : "ou=Groups"), ldap_info.base))
+						== LDAP_FILT_MAXSIZ) {
+			warnx("Error forming group base");
+			goto fail;
+		}
+		if ((ldap_info.group_tree = strdup(base)) == NULL) {
+			warnx("Error duplicating group base");
+			goto fail;
+		}
 	}
 	return 0;
+  fail:
+  	return -1;
 }
 
 
