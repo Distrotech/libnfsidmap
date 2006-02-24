@@ -47,6 +47,7 @@
 #include "nfsidmap.h"
 #include "nfsidmap_internal.h"
 #include "cfg.h"
+#include <syslog.h>
 
 /*
  * NSS Translation Methods
@@ -159,8 +160,11 @@ static struct passwd *nss_getpwnam(const char *name, const char *domain, int *er
 
 	err = EINVAL;
 	localname = strip_domain(name, domain);
-	if (localname == NULL)
+	if (localname == NULL) {
+		IDMAP_LOG(0, ("nss_getpwnam: name '%s' does not map " 
+			"into domain '%s'\n", name, domain));
 		goto err_free_buf;
+	}
 
 	err = getpwnam_r(localname, &buf->pwbuf, buf->buf, buflen, &pw);
 	free(localname);
@@ -168,6 +172,10 @@ static struct passwd *nss_getpwnam(const char *name, const char *domain, int *er
 		*err_p = 0;
 		return &buf->pwbuf;
 	}
+	IDMAP_LOG(0,
+		("nss_getpwnam: name '%s' not found in domain '%s'\n",
+		localname, domain));
+
 err_free_buf:
 	free(buf);
 err:

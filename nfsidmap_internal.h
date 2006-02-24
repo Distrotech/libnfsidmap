@@ -52,3 +52,9 @@ typedef enum {
 	IDTYPE_USER = 1,
 	IDTYPE_GROUP = 2
 } idtypes;
+
+extern int idmap_verbosity;
+extern nfs4_idmap_log_function_t idmap_log_func;
+/* Level zero always prints, others print depending on verbosity level */
+#define IDMAP_LOG(LVL, MSG) \
+	do { if (LVL <= idmap_verbosity) (*idmap_log_func)MSG; } while (0)

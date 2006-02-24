@@ -38,6 +38,8 @@
 /* XXX arbitrary */
 #define NFS4_MAX_DOMAIN_LEN 512
 
+typedef void (*nfs4_idmap_log_function_t)(const char *, ...);
+
 int nfs4_init_name_mapping(char *conffile);
 int nfs4_get_default_domain(char *server, char *domain, size_t len);
 int nfs4_uid_to_name(uid_t uid, char *domain, char *name, size_t len);
@@ -46,3 +48,4 @@ int nfs4_name_to_uid(char *name, uid_t *uid);
 int nfs4_name_to_gid(char *name, gid_t *gid);
 int nfs4_gss_princ_to_ids(char *secname, char *princ, uid_t *uid, gid_t *gid);
 int nfs4_gss_princ_to_grouplist(char *secname, char *princ, gid_t *groups, int *ngroups);
+void nfs4_set_debug(int dbg_level, nfs4_idmap_log_function_t dbg_logfunc);

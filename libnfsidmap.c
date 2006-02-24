@@ -45,6 +45,8 @@
 #include <grp.h>
 #include <netdb.h>
 #include <err.h>
+#include <syslog.h>
+#include <stdarg.h>
 #include "nfsidmap.h"
 #include "nfsidmap_internal.h"
 #include "cfg.h"
@@ -57,6 +59,19 @@ static char *default_domain;
 #ifndef PATH_IDMAPDCONF
 #define PATH_IDMAPDCONF "/etc/idmapd.conf"
 #endif
+
+/* Default logging fuction */
+static void default_logger(const char *fmt, ...)
+{
+	va_list vp;
+
+	va_start(vp, fmt);
+	vsyslog(LOG_WARNING, fmt, vp); 
+	va_end(vp);
+}
+
+nfs4_idmap_log_function_t idmap_log_func = default_logger;
+int idmap_verbosity = 0;
 
 static int domain_from_dns(char **domain)
 {
@@ -79,6 +94,7 @@ int nfs4_init_name_mapping(char *conffile)
 {
 	int ret;
 	char *method;
+	int dflt = 0;
 
 	/* XXX: need to be able to reload configurations... */
 	if (trans) /* already succesfully initialized */
@@ -88,22 +104,30 @@ int nfs4_init_name_mapping(char *conffile)
 	else
 		conf_path = PATH_IDMAPDCONF;
 	conf_init();
+	idmap_verbosity = conf_get_num("General", "Verbosity", 0);
 	default_domain = conf_get_str("General", "Domain");
 	if (default_domain == NULL) {
+		dflt = 1;
 		ret = domain_from_dns(&default_domain);
 		if (ret) {
-			warnx("unable to determine a default nfsv4 domain; "
-				" consider specifying one in idmapd.conf\n");
+			IDMAP_LOG(0, ("libnfsidmap: Unable to determine "
+				  "a default nfsv4 domain; consider "
+				  "specifying one in idmapd.conf\n"));
 			return ret;
 		}
 	}
+	IDMAP_LOG(1, ("libnfsidmap: using%s domain: %s\n",
+		(dflt ? " (default)" : ""), default_domain));
+
 	method = conf_get_str("Translation", "Method");
 	if (method == NULL)
 		method = "nsswitch";
 	if (set_trans_method(method) == -1) {
-		warnx("Error in translation table setup");
+		IDMAP_LOG(0, ("libnfsidmap: Error in translation table setup "
+			 "for method %s\n", method));
 		return -1;
 	}
+	IDMAP_LOG(1, ("libnfsidmap: using translation method: %s\n", method)); 
 
 	if (trans->init) {
 		ret = trans->init();
@@ -124,8 +148,8 @@ char * get_default_domain(void)
 		return default_domain;
 	ret = domain_from_dns(&default_domain);
 	if (ret) {
-		warnx("unable to determine a default nfsv4 domain; "
-			" consider specifying one in idmapd.conf\n");
+		IDMAP_LOG(0, ("Unable to determine a default nfsv4 domain; "
+			" consider specifying one in idmapd.conf\n"));
 		default_domain = "";
 	}
 	return default_domain;
@@ -226,3 +250,11 @@ int nfs4_gss_princ_to_grouplist(char *secname, char *princ,
 		return ret;
 	return trans->gss_princ_to_grouplist(secname, princ, groups, ngroups);
 }
+
+void nfs4_set_debug(int dbg_level, void (*logger)(const char *, ...))
+{
+	if (logger)
+		idmap_log_func = logger;
+	idmap_verbosity = dbg_level;	
+}
+
