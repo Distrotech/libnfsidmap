@@ -104,7 +104,6 @@ int nfs4_init_name_mapping(char *conffile)
 	else
 		conf_path = PATH_IDMAPDCONF;
 	conf_init();
-	idmap_verbosity = conf_get_num("General", "Verbosity", 0);
 	default_domain = conf_get_str("General", "Domain");
 	if (default_domain == NULL) {
 		dflt = 1;
