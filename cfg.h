@@ -56,6 +56,7 @@ extern struct conf_list *conf_get_list(char *, char *);
 extern struct conf_list *conf_get_tag_list(char *);
 extern int      conf_get_num(char *, char *, int);
 extern char    *conf_get_str(char *, char *);
+extern char    *conf_get_str_with_def(char *, char *, char*);
 extern void     conf_init(void);
 extern int      conf_match_num(char *, char *, int);
 extern void     conf_reinit(void);

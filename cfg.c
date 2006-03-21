@@ -445,6 +445,23 @@ conf_get_str (char *section, char *tag)
   return 0;
 }
 
+/* Return the string value denoted by TAG in section SECTION
+   returns DEF if not found .  */
+char *
+conf_get_str_with_def(char *section, char *tag, char *def)
+{
+  struct conf_binding *cb;
+
+  for (cb = LIST_FIRST (&conf_bindings[conf_hash (section)]); cb;
+       cb = LIST_NEXT (cb, link))
+    if (strcasecmp (section, cb->section) == 0
+	&& strcasecmp (tag, cb->tag) == 0)
+      {
+	return cb->value;
+      }
+  return def;
+}
+
 /*
  * Build a list of string values out of the comma separated value denoted by
  * TAG in SECTION.

@@ -55,6 +55,11 @@
 int set_trans_method(char *);
 
 static char *default_domain;
+static char *nobody_user;
+static char *nobody_group;
+
+#define DEFAULT_NOBODY_USER	"nobody"
+#define DEFAULT_NOBODY_GROUP	"nobody"
 
 #ifndef PATH_IDMAPDCONF
 #define PATH_IDMAPDCONF "/etc/idmapd.conf"
@@ -118,9 +123,15 @@ int nfs4_init_name_mapping(char *conffile)
 	IDMAP_LOG(1, ("libnfsidmap: using%s domain: %s\n",
 		(dflt ? " (default)" : ""), default_domain));
 
-	method = conf_get_str("Translation", "Method");
-	if (method == NULL)
-		method = "nsswitch";
+	nobody_user = conf_get_str_with_def("Mapping", "Nobody-User",
+					    DEFAULT_NOBODY_USER);
+	nobody_group = conf_get_str_with_def("Mapping", "Nobody-Group",
+					     DEFAULT_NOBODY_GROUP);
+
+	IDMAP_LOG(1, ("libnfsidmap: Nobody-User: '%s' Nobody-Group: '%s'\n",
+		nobody_user, nobody_group));
+
+	method = conf_get_str_with_def("Translation", "Method", "nsswitch");
 	if (set_trans_method(method) == -1) {
 		IDMAP_LOG(0, ("libnfsidmap: Error in translation table setup "
 			 "for method %s\n", method));
@@ -215,8 +226,12 @@ int nfs4_name_to_uid(char *name, uid_t *uid)
 
 	ret = nfs4_init_name_mapping(NULL);
 	if (ret)
-		return ret;
-	return trans->name_to_uid(name, uid);
+		goto out;
+	ret = trans->name_to_uid(name, uid);
+	if (ret)
+		ret = trans->name_to_uid(nobody_user, uid);
+  out:
+  	return ret;
 }
 
 int nfs4_name_to_gid(char *name, gid_t *gid)
@@ -225,8 +240,12 @@ int nfs4_name_to_gid(char *name, gid_t *gid)
 
 	ret = nfs4_init_name_mapping(NULL);
 	if (ret)
-		return ret;
-	return trans->name_to_gid(name, gid);
+		goto out;
+	ret = trans->name_to_gid(name, gid);
+	if (ret)
+		ret = trans->name_to_gid(nobody_group, gid);
+  out:
+  	return ret;
 }
 
 int nfs4_gss_princ_to_ids(char *secname, char *princ, uid_t *uid, gid_t *gid)
@@ -235,8 +254,13 @@ int nfs4_gss_princ_to_ids(char *secname, char *princ, uid_t *uid, gid_t *gid)
 
 	ret = nfs4_init_name_mapping(NULL);
 	if (ret)
-		return ret;
-	return trans->princ_to_ids(secname, princ, uid, gid);
+		goto out;
+	ret = trans->princ_to_ids(secname, princ, uid, gid);
+	if (ret) {
+		ret = trans->princ_to_ids(secname, nobody_user, uid, gid);
+	}
+  out:
+	return ret;
 }
 
 int nfs4_gss_princ_to_grouplist(char *secname, char *princ,
@@ -246,8 +270,14 @@ int nfs4_gss_princ_to_grouplist(char *secname, char *princ,
 
 	ret = nfs4_init_name_mapping(NULL);
 	if (ret)
-		return ret;
-	return trans->gss_princ_to_grouplist(secname, princ, groups, ngroups);
+		goto out;
+	ret =  trans->gss_princ_to_grouplist(secname, princ, groups, ngroups);
+	if (ret) {
+		ret =  trans->gss_princ_to_grouplist(secname, nobody_user,
+						     groups, ngroups);
+	}
+  out:
+  	return ret;
 }
 
 void nfs4_set_debug(int dbg_level, void (*logger)(const char *, ...))

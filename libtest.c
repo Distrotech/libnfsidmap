@@ -59,34 +59,87 @@ main(int ac, char **av)
 
 	if (ac != 3) {
 		printf("Usage: %s <user@nfsv4domain> <k5princ@REALM>\n",av[0]);
-		return;
+		return 1;
 	}
+
+	nfs4_set_debug(0, NULL);
 
 	name = av[1];
 	princ = av[2];
 	err = nfs4_init_name_mapping(NULL);
+	if (err) {
+		printf("nfs4_init_name_mapping: error %d\n", err);
+		return 1;
+	}
 
-	err = nfs4_gss_princ_to_ids(princ, &uid, &gid);
-	printf("nfs4_gss_princ_to_ids: princ %s has uid %d gid %d\n",
-	         princ, uid, gid);
+	err = nfs4_gss_princ_to_ids("krb5", princ, &uid, &gid);
+	if (err)
+		printf("nfs4_gss_princ_to_ids: error %d\n", err);
+	else
+		printf("nfs4_gss_princ_to_ids: princ %s has uid %d gid %d\n",
+			princ, uid, gid);
+#if 1
+	if (err) {
+		printf("calling it quits!\n");
+		return err;
+	}
+#endif
 
 	err = nfs4_name_to_uid(name, &uid);
-	printf("nfs4_name_to_uid: name %s has uid %d\n",
-	         name, uid);
+	if (err)
+		printf("nfs4_name_to_uid: error %d\n", err);
+	else
+		printf("nfs4_name_to_uid: name %s has uid %d\n",
+			name, uid);
 
+#if 1
+	if (err) {
+		printf("calling it quits!\n");
+		return err;
+	}
+#endif
 	err = nfs4_name_to_gid(name, &gid);
-	printf("nfs4_name_to_uid: name %s has gid %d\n",
-	         name, gid);
+	if (err)
+		printf("nfs4_name_to_gid: error %d\n", err);
+	else
+		printf("nfs4_name_to_gid: name %s has gid %d\n",
+			name, gid);
 
+#if 1
+	if (err) {
+		printf("calling it quits!\n");
+		return err;
+	}
+#endif
 	/* uid is set by nfs4_name_to_uid() */
 	memset(name_buf, 0, 32);
 	err = nfs4_uid_to_name(uid, NULL, name_buf, 32);
-	printf("nfs4_uid_to_name: uid %d has name %s\n",
-	         uid, name_buf);
+	if (err)
+		printf("nfs4_uid_to_name: error %d\n", err);
+	else
+		printf("nfs4_uid_to_name: uid %d has name %s\n",
+			uid, name_buf);
 
+#if 1
+	if (err) {
+		printf("calling it quits!\n");
+		return err;
+	}
+#endif
 	/* gid is set by nfs4_name_to_gid() */
 	memset(name_buf, 0, 32);
 	err = nfs4_gid_to_name(gid, NULL, name_buf, 32);
-	printf("nfs4_gid_to_name: gid %d has name %s\n",
-	         gid, name_buf);
+	if (err)
+		printf("nfs4_gid_to_name: error %d\n", err);
+	else
+		printf("nfs4_gid_to_name: gid %d has name %s\n",
+			gid, name_buf);
+
+#if 1
+	if (err) {
+		printf("calling it quits!\n");
+		return err;
+	}
+#endif
+	return 0;
 }

@@ -127,11 +127,16 @@ static char *strip_domain(const char *name, const char *domain)
 	int len;
 
 	c = strchr(name, '@');
-	if (!c)
+	if (c == NULL && domain != NULL)
 		goto out;
-	if (domain && strcmp(c + 1, domain) != 0)
-		goto out;
-	len = c - name;
+	if (c == NULL && domain == NULL) {
+		len = strlen(name) + 1;
+	} else {
+		if (domain && strcmp(c + 1, domain) != 0)
+			goto out;
+		len = c - name;
+	}
+
 	l = malloc(len + 1);
 	if (l == NULL)
 		goto out;
@@ -160,21 +165,25 @@ static struct passwd *nss_getpwnam(const char *name, const char *domain, int *er
 
 	err = EINVAL;
 	localname = strip_domain(name, domain);
+	IDMAP_LOG(4, ("nss_getpwnam: name '%s' domain '%s': "
+		  "resulting localname '%s'\n", name, domain, localname));
 	if (localname == NULL) {
 		IDMAP_LOG(0, ("nss_getpwnam: name '%s' does not map " 
-			"into domain '%s'\n", name, domain));
+			"into domain '%s'\n", name,
+			domain ? domain : "<not-provided>"));
 		goto err_free_buf;
 	}
 
 	err = getpwnam_r(localname, &buf->pwbuf, buf->buf, buflen, &pw);
+	if (pw == NULL && domain != NULL)
+		IDMAP_LOG(0,
+			("nss_getpwnam: name '%s' not found in domain '%s'\n",
+			localname, domain));
 	free(localname);
-	if (err == 0) {
+	if (err == 0 && pw != NULL) {
 		*err_p = 0;
-		return &buf->pwbuf;
+		return pw;
 	}
-	IDMAP_LOG(0,
-		("nss_getpwnam: name '%s' not found in domain '%s'\n",
-		localname, domain));
 
 err_free_buf:
 	free(buf);
@@ -195,6 +204,7 @@ static int nss_name_to_uid(char *name, uid_t *uid)
 		goto out;
 	*uid = pw->pw_uid;
 	free(pw);
+	err = 0;
 out:
 	return err;
 }
@@ -238,9 +248,12 @@ static int nss_gss_princ_to_ids(char *secname, char *princ,
 	if (strcmp(secname, "krb5") != 0)
 		return -EINVAL;
 	/* XXX: not quite right?  Need to know default realm? */
+	/* XXX: this should call something like getgssauthnam instead? */
 	pw = nss_getpwnam(princ, NULL, &err);
-	if (pw == NULL)
+	if (pw == NULL) {
+		err = -EINVAL;
 		goto out;
+	}
 	*uid = pw->pw_uid;
 	*gid = pw->pw_gid;
 	free(pw);
@@ -257,9 +270,12 @@ int nss_gss_princ_to_grouplist(char *secname, char *princ,
 	if (strcmp(secname, "krb5") != 0)
 		goto out;
 	/* XXX: not quite right?  Need to know default realm? */
+	/* XXX: this should call something like getgssauthnam instead? */
 	pw = nss_getpwnam(princ, NULL, &ret);
-	if (pw == NULL)
+	if (pw == NULL) {
+		ret = -EINVAL;
 		goto out;
+	}
 	if (getgrouplist(pw->pw_name, pw->pw_gid, groups, ngroups) < 0)
 		ret = -ERANGE;
 	free(pw);
