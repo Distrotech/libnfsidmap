@@ -1,3 +1,22 @@
+libnfsidmap (0.15-1) unstable; urgency=low
+
+  * New upstream release
+  * debian/control:
+    -bump Standards-Version to 3.6.2
+    -Section: libdevel for libnfsidmap-dev
+    -Priority: standard for libnfsidmap1
+    -add cdbs to Build-Depends: 
+    -remove unneeded whitespace from the descriptions
+    -raise Build-Depends on debhelper, now (>=5.0.0)
+    -add an URL to the upstream sources
+  * debian/rules: use cdbs
+  * debian/{*dirs,docs}: removed files that are unnecessary because of
+    cdbs
+  * change compat to 5
+  * debian/watch: create
+
+ -- Timo Aaltonen <tjaalton@cc.hut.fi>  Mon, 27 Mar 2006 17:26:46 +0300
+
 libnfsidmap (0.13-1) unstable; urgency=low
 
   * new "upstream"
