@@ -170,7 +170,7 @@ ldap_init_and_bind(LDAP **pld,
 	if (apiinfo.ldapai_protocol_version == LDAP_VERSION3 &&
 	    current_version != LDAP_VERSION3) {
 		new_version = LDAP_VERSION3;
-		IDMAP_LOG(2, ("ldap_init_and_bind: version mismatch between "
+		IDMAP_LOG(4, ("ldap_init_and_bind: version mismatch between "
 			  "API information and protocol version. Setting "
 			  "protocol version to %d\n", new_version));
 		ldap_set_option(ld, LDAP_OPT_PROTOCOL_VERSION, &new_version);
