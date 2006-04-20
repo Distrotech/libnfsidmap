@@ -196,7 +196,7 @@ static int nss_name_to_uid(char *name, uid_t *uid)
 {
 	struct passwd *pw = NULL;
 	char *domain;
-	int err = -EINVAL;
+	int err = -ENOENT;
 
 	domain = get_default_domain();
 	pw = nss_getpwnam(name, domain, &err);
@@ -251,7 +251,7 @@ static int nss_gss_princ_to_ids(char *secname, char *princ,
 	/* XXX: this should call something like getgssauthnam instead? */
 	pw = nss_getpwnam(princ, NULL, &err);
 	if (pw == NULL) {
-		err = -EINVAL;
+		err = -ENOENT;
 		goto out;
 	}
 	*uid = pw->pw_uid;
@@ -273,7 +273,7 @@ int nss_gss_princ_to_grouplist(char *secname, char *princ,
 	/* XXX: this should call something like getgssauthnam instead? */
 	pw = nss_getpwnam(princ, NULL, &ret);
 	if (pw == NULL) {
-		ret = -EINVAL;
+		ret = -ENOENT;
 		goto out;
 	}
 	if (getgrouplist(pw->pw_name, pw->pw_gid, groups, ngroups) < 0)
