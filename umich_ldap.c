@@ -375,7 +375,7 @@ umich_name_to_ids(char *name, int idtype, uid_t *uid, gid_t *gid,
 		uid_t tmp_uid;
 		gid_t tmp_gid;
 
-		if (!(idstr = ldap_get_values(ld, result, attr_res))) {
+		if ((idstr = ldap_get_values(ld, result, attr_res)) == NULL) {
 			lerr = ldap_result2error(ld, result, 0);
 			IDMAP_LOG(2, ("umich_name_to_ids: ldap_get_values: "
 				  "%s (%d)\n", ldap_err2string(lerr), lerr));
@@ -526,7 +526,7 @@ umich_id_to_name(uid_t id, int idtype, char **name, size_t len,
 		goto out_unbind;
 	}
 
-	if (!(namestr = ldap_get_values(ld, result, attr_res))) {
+	if ((namestr = ldap_get_values(ld, result, attr_res)) == NULL) {
 		lerr = ldap_result2error(ld, result, 0);
 		IDMAP_LOG(2, ("umich_id_to_name: ldap_get_values: "
 			  "%s (%d)\n", ldap_err2string(lerr), lerr));
@@ -617,7 +617,7 @@ umich_gss_princ_to_grouplist(char *principal, gid_t *groups, int *ngroups,
 		goto out_unbind;
 	}
 
-	if (!(namestr = ldap_get_values(ld, result, attrs[0]))) {
+	if ((namestr = ldap_get_values(ld, result, attrs[0])) == NULL) {
 		lerr = ldap_result2error(ld, result, 0);
 		IDMAP_LOG(2, ("umich_gss_princ_to_grouplist: ldap_get_values: "
 			  "%s (%d)\n", ldap_err2string(lerr), lerr));
@@ -855,10 +855,10 @@ out_err:
 static int
 umichldap_init(void)
 {
-	char *tssl;
+	char *tssl, *canonicalize;
 	int missing_server = 0, missing_base = 0;
 	char missing_msg[128] = "";
-	char *server_in;
+	char *server_in, *canon_name;
 
 	server_in = conf_get_str(LDAP_SECTION, "LDAP_server");
 	ldap_info.base = conf_get_str(LDAP_SECTION, "LDAP_base");
@@ -890,9 +890,19 @@ umichldap_init(void)
 		goto fail;
 	}
   
-  	ldap_info.server = get_canonical_hostname(server_in);
-	if (ldap_info.server == NULL)
-		ldap_info.server = server_in;
+	ldap_info.server = server_in;
+	canonicalize = conf_get_str_with_def(LDAP_SECTION, "LDAP_canonicalize_name", "yes");
+	if ((strcasecmp(canonicalize, "true") == 0) ||
+	    (strcasecmp(canonicalize, "on") == 0) ||
+	    (strcasecmp(canonicalize, "yes") == 0)) {
+		canon_name = get_canonical_hostname(server_in);
+		if (canon_name == NULL)
+			IDMAP_LOG(0, ("umichldap_init: Warning! Unable to "
+				  "canonicalize server name '%s' as requested.\n",
+				  server_in));
+		else
+			ldap_info.server = canon_name;
+	}
 
 	/* get the ldap mapping attributes/objectclasses (all have defaults) */
 	ldap_map.NFSv4_person_objcls =
@@ -953,7 +963,9 @@ umichldap_init(void)
 
 
 	/* print out some good debugging info */
-	IDMAP_LOG(1, ("umichldap_init: server  : %s (from config '%s')\n",
+	IDMAP_LOG(1, ("umichldap_init: canonicalize_name: %s\n",
+		  canonicalize));
+	IDMAP_LOG(1, ("umichldap_init: server  : %s (from config value '%s')\n",
 		  ldap_info.server, server_in));
 	IDMAP_LOG(1, ("umichldap_init: port    : %d\n", ldap_info.port));
 	IDMAP_LOG(1, ("umichldap_init: people  : %s\n", ldap_info.people_tree));

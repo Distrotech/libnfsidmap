@@ -183,6 +183,8 @@ static struct passwd *nss_getpwnam(const char *name, const char *domain, int *er
 	if (err == 0 && pw != NULL) {
 		*err_p = 0;
 		return pw;
+	} else if (err == 0 && pw == NULL) {
+		err = ENOENT;
 	}
 
 err_free_buf:
@@ -245,7 +247,7 @@ static int nss_gss_princ_to_ids(char *secname, char *princ,
 	struct passwd *pw;
 	int err = 0;
 
-	if (strcmp(secname, "krb5") != 0)
+	if (strcmp(secname, "krb5") != 0 && strcmp(secname, "spkm3") != 0)
 		return -EINVAL;
 	/* XXX: not quite right?  Need to know default realm? */
 	/* XXX: this should call something like getgssauthnam instead? */
@@ -267,7 +269,7 @@ int nss_gss_princ_to_grouplist(char *secname, char *princ,
 	struct passwd *pw;
 	int ret = -EINVAL;
 
-	if (strcmp(secname, "krb5") != 0)
+	if (strcmp(secname, "krb5") != 0 && strcmp(secname, "spkm3") != 0)
 		goto out;
 	/* XXX: not quite right?  Need to know default realm? */
 	/* XXX: this should call something like getgssauthnam instead? */
