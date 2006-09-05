@@ -32,6 +32,8 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#ifdef ENABLE_LDAP
+
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netdb.h>
@@ -1019,3 +1021,5 @@ struct trans_func umichldap_trans = {
 	.gid_to_name    = umichldap_gid_to_name,
 	.gss_princ_to_grouplist = umichldap_gss_princ_to_grouplist,
 };
+
+#endif

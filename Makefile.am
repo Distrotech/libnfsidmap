@@ -4,7 +4,6 @@ libnfsidmap_la_SOURCES = libnfsidmap.c nss.c umich_ldap.c cfg.c strlcpy.c cfg.h 
 libnfsidmap_la_LDFLAGS = -version-info 2:0:2
 include_HEADERS = nfsidmap.h
 EXTRA_DIST = $(man_MANS) libtest.c idmapd.conf
-LIBS = -lldap
 
 #	XXX: also exclude debian/files and debian/files.new ? do a clean??
 dist-hook:

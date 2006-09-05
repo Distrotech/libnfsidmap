@@ -120,8 +120,8 @@ int nfs4_init_name_mapping(char *conffile)
 
 	method = conf_get_str_with_def("Translation", "Method", "nsswitch");
 	if (set_trans_method(method) == -1) {
-		IDMAP_LOG(0, ("libnfsidmap: Error in translation table setup "
-			 "for method %s\n", method));
+		IDMAP_LOG(0, ("libnfsidmap: requested tranlation method, "
+			 "'%s', is not available\n", method));
 		return -1;
 	}
 	IDMAP_LOG(1, ("libnfsidmap: using translation method: %s\n", method)); 
@@ -166,11 +166,13 @@ nfs4_get_default_domain(char *server, char *domain, size_t len)
 extern struct trans_func nss_trans;
 extern struct trans_func umichldap_trans;
 
-#define TR_SIZE 2
-static struct trans_func * t_array[TR_SIZE] = {
-	[0] = &nss_trans,
-	[1] = &umichldap_trans,
+static struct trans_func * t_array[] = {
+	&nss_trans,
+#ifdef ENABLE_LDAP
+	&umichldap_trans,
+#endif
 };
+#define TR_SIZE (sizeof(t_array)/sizeof(*t_array))
 
 int
 set_trans_method(char *method)
