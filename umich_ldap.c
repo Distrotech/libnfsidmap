@@ -45,6 +45,8 @@
 #include <limits.h>
 #include <pwd.h>
 #include <err.h>
+/* We are using deprecated functions, get the prototypes... */
+#define LDAP_DEPRECATED 1
 #include <ldap.h>
 #include "nfsidmap.h"
 #include "nfsidmap_internal.h"
@@ -80,10 +82,6 @@ struct ldap_map_names{
 	char *NFSv4_gid_attr;
 	char *NFSv4_member_attr;
 	char *GSS_principal_attr;
-};
-
-struct attr {
-	const char **u_attr[2];
 };
 
 struct umich_ldap_info {
@@ -137,12 +135,17 @@ ldap_init_and_bind(LDAP **pld,
 	int current_version, new_version;
 	char server_url[1024];
 	int debug_level = 65535;
+	int i;
 	LDAPAPIInfo apiinfo = {.ldapai_info_version = LDAP_API_INFO_VERSION};
 
 	snprintf(server_url, sizeof(server_url), "%s://%s:%d",
 		 (linfo->use_ssl && linfo->ca_cert) ? "ldaps" : "ldap",
 		 linfo->server, linfo->port);
 
+	/*
+	 * XXX We really, REALLY only want to initialize once, not for
+	 * each request.  Figure out how to do that!
+	 */
 	if ((lerr = ldap_initialize(&ld, server_url)) != LDAP_SUCCESS) {
 		IDMAP_LOG(0, ("ldap_init_and_bind: ldap_initialize() failed "
 			  "to [%s]: %s (%d)\n", server_url,
@@ -177,6 +180,13 @@ ldap_init_and_bind(LDAP **pld,
 			  "protocol version to %d\n", new_version));
 		ldap_set_option(ld, LDAP_OPT_PROTOCOL_VERSION, &new_version);
 	}
+
+	for (i = 0; apiinfo.ldapai_extensions[i]; i++) {
+		char *extension = apiinfo.ldapai_extensions[i];
+		ldap_memfree (extension);
+	}
+	ldap_memfree (apiinfo.ldapai_extensions);
+	ldap_memfree(apiinfo.ldapai_vendor_name);
 
 	/* Set sizelimit option if requested */
 	if (sizelimit) {
@@ -277,7 +287,7 @@ umich_name_to_ids(char *name, int idtype, uid_t *uid, gid_t *gid,
 	struct timeval timeout = {
 		.tv_sec = 2,
 	};
-	LDAPMessage *result, *entry;
+	LDAPMessage *result = NULL, *entry;
 	BerElement *ber = NULL;
 	char **idstr, filter[LDAP_FILT_MAXSIZ], *base;
 	char *attrs[3];
@@ -424,6 +434,8 @@ umich_name_to_ids(char *name, int idtype, uid_t *uid, gid_t *gid,
 out_memfree:
 	ber_free(ber, 0);
 out_unbind:
+	if (result)
+		ldap_msgfree(result);
 	ldap_unbind(ld);
 out:
 	return err;
@@ -437,9 +449,9 @@ umich_id_to_name(uid_t id, int idtype, char **name, size_t len,
 	struct timeval timeout = {
 		.tv_sec = 2,
 	};
-	LDAPMessage *result, *entry;
+	LDAPMessage *result = NULL, *entry;
 	BerElement *ber;
-	char **namestr, filter[LDAP_FILT_MAXSIZ], *base;
+	char **names = NULL, filter[LDAP_FILT_MAXSIZ], *base;
 	char idstr[16];
 	char *attrs[2];
 	char *attr_res;
@@ -528,20 +540,37 @@ umich_id_to_name(uid_t id, int idtype, char **name, size_t len,
 		goto out_unbind;
 	}
 
-	if ((namestr = ldap_get_values(ld, result, attr_res)) == NULL) {
+	if ((names = ldap_get_values(ld, result, attr_res)) == NULL) {
 		lerr = ldap_result2error(ld, result, 0);
 		IDMAP_LOG(2, ("umich_id_to_name: ldap_get_values: "
 			  "%s (%d)\n", ldap_err2string(lerr), lerr));
 		goto out_memfree;
 	}
 
-	memcpy (*name, *namestr, strlen(*namestr));
+	/*
+	 * Verify there is enough room in the output buffer before
+	 * copying returned string. (strlen doesn't count the null,
+	 * we make sure there is room for the null also, therefore
+	 * we use ">=" not just ">")
+	 */
+	if (strlen(names[0]) >= len) {
+		/* not enough space to return the name */
+		IDMAP_LOG(1, ("umich_id_to_name: output buffer size (%d) "
+			  "too small to return string, '%s', of length %d\n",
+			  len, names[0], strlen(names[0])));
+		goto out_memfree;
+	}
+	strcpy(*name, names[0]);
 
 	err = 0;
 out_memfree:
+	if (names)
+		ldap_value_free(names);
 	ldap_memfree(attr_res);
 	ber_free(ber, 0);
 out_unbind:
+	if (result)
+		ldap_msgfree(result);
 	ldap_unbind(ld);
 out:
 	return err;
@@ -556,7 +585,7 @@ umich_gss_princ_to_grouplist(char *principal, gid_t *groups, int *ngroups,
 		.tv_sec = 2,
 	};
 	LDAPMessage *result, *entry;
-	char **namestr, filter[LDAP_FILT_MAXSIZ];
+	char **names, filter[LDAP_FILT_MAXSIZ];
 	char *attrs[2];
 	int count = 0, err = -ENOMEM, lerr, f_len;
 	gid_t *curr_group;
@@ -619,7 +648,7 @@ umich_gss_princ_to_grouplist(char *principal, gid_t *groups, int *ngroups,
 		goto out_unbind;
 	}
 
-	if ((namestr = ldap_get_values(ld, result, attrs[0])) == NULL) {
+	if ((names = ldap_get_values(ld, result, attrs[0])) == NULL) {
 		lerr = ldap_result2error(ld, result, 0);
 		IDMAP_LOG(2, ("umich_gss_princ_to_grouplist: ldap_get_values: "
 			  "%s (%d)\n", ldap_err2string(lerr), lerr));
@@ -634,11 +663,13 @@ umich_gss_princ_to_grouplist(char *principal, gid_t *groups, int *ngroups,
 			"(&(objectClass=%s)(%s=%s))",
 			ldap_map.NFSv4_group_objcls,
 			ldap_map.NFSv4_member_attr,
-			*namestr)) == LDAP_FILT_MAXSIZ ) {
+			names[0])) == LDAP_FILT_MAXSIZ ) {
 		IDMAP_LOG(0, ("ERROR: umich_gss_princ_to_grouplist: "
 			  "filter too long!\n"));
+		ldap_value_free(names);
 		goto out_unbind;
 	}
+	ldap_value_free(names);
 
 	attrs[0] = ldap_map.NFSv4_gid_attr;
 	attrs[1] = NULL;
