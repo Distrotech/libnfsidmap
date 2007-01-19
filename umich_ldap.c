@@ -52,7 +52,7 @@
 #include "nfsidmap_internal.h"
 #include "cfg.h"
 
-/* attribbute/objectclass default mappings */
+/* attribute/objectclass default mappings */
 #define DEFAULT_UMICH_OBJCLASS_REMOTE_PERSON	"NFSv4RemotePerson"
 #define DEFAULT_UMICH_OBJCLASS_REMOTE_GROUP	"NFSv4RemoteGroup"
 #define DEFAULT_UMICH_ATTR_NFSNAME		"NFSv4Name"
@@ -62,6 +62,9 @@
 #define DEFAULT_UMICH_ATTR_GIDNUMBER		"gidNumber"
 #define DEFAULT_UMICH_ATTR_MEMBERUID		"memberUid"
 #define DEFAULT_UMICH_ATTR_GSSAUTHNAME		"GSSAuthName"
+#define DEFAULT_UMICH_ATTR_MEMBEROF		"memberof"
+
+#define DEFAULT_UMICH_SEARCH_TIMEOUT		4
 
 /* config section */
 #define LDAP_SECTION "UMICH_SCHEMA"
@@ -69,6 +72,7 @@
 #ifndef LDAP_FILT_MAXSIZ
 #define LDAP_FILT_MAXSIZ	1024
 #endif
+
 
 /* Local structure definitions */
 
@@ -81,7 +85,9 @@ struct ldap_map_names{
 	char *NFSv4_group_nfsname_attr;
 	char *NFSv4_gid_attr;
 	char *NFSv4_member_attr;
+	char *NFSv4_member_of_attr;
 	char *GSS_principal_attr;
+	char *NFSv4_grouplist_filter; /* Filter for grouplist lookups */
 };
 
 struct umich_ldap_info {
@@ -94,6 +100,10 @@ struct umich_ldap_info {
 	char *passwd;		/* Password to use when binding to directory */
 	int use_ssl;		/* SSL flag */
 	char *ca_cert;		/* File location of the ca_cert */
+	int memberof_for_groups;/* Use 'memberof' attribute when
+				   looking up user groups */
+	int ldap_timeout;	/* Timeout in seconds for searches
+				   by ldap_search_st */
 };
 
 /* GLOBAL data */
@@ -108,6 +118,8 @@ static struct umich_ldap_info ldap_info = {
 	.passwd = NULL,
 	.use_ssl = 0,
 	.ca_cert = NULL,
+	.memberof_for_groups = 0,
+	.ldap_timeout = DEFAULT_UMICH_SEARCH_TIMEOUT, 
 };
 
 static struct ldap_map_names ldap_map = {
@@ -119,7 +131,9 @@ static struct ldap_map_names ldap_map = {
 	.NFSv4_group_nfsname_attr = NULL,
 	.NFSv4_gid_attr = NULL,
 	.NFSv4_member_attr = NULL,
+	.NFSv4_member_of_attr = NULL,
 	.GSS_principal_attr = NULL,
+	.NFSv4_grouplist_filter = NULL,
 };
 
 /* Local routines */
@@ -285,7 +299,7 @@ umich_name_to_ids(char *name, int idtype, uid_t *uid, gid_t *gid,
 {
 	LDAP *ld = NULL;
 	struct timeval timeout = {
-		.tv_sec = 2,
+		.tv_sec = linfo->ldap_timeout,
 	};
 	LDAPMessage *result = NULL, *entry;
 	BerElement *ber = NULL;
@@ -447,7 +461,7 @@ umich_id_to_name(uid_t id, int idtype, char **name, size_t len,
 {
 	LDAP *ld = NULL;
 	struct timeval timeout = {
-		.tv_sec = 2,
+		.tv_sec = linfo->ldap_timeout,
 	};
 	LDAPMessage *result = NULL, *entry;
 	BerElement *ber;
@@ -582,13 +596,14 @@ umich_gss_princ_to_grouplist(char *principal, gid_t *groups, int *ngroups,
 {
 	LDAP *ld = NULL;
 	struct timeval timeout = {
-		.tv_sec = 2,
+		.tv_sec = linfo->ldap_timeout,
 	};
 	LDAPMessage *result, *entry;
 	char **names, filter[LDAP_FILT_MAXSIZ];
 	char *attrs[2];
 	int count = 0, err = -ENOMEM, lerr, f_len;
-	gid_t *curr_group;
+        int i, num_gids;
+	gid_t *curr_group = groups;
 
 	err = -EINVAL;
 	if (linfo == NULL || linfo->server == NULL ||
@@ -638,6 +653,9 @@ umich_gss_princ_to_grouplist(char *principal, gid_t *groups, int *ngroups,
 	err = -ENOENT;
 	count = ldap_count_entries(ld, result);
 	if (count != 1) {
+		IDMAP_LOG(2, ("umich_gss_princ_to_grouplist: "
+                                "ldap account lookup of gssauthname %s returned %d accounts\n",
+                                principal,count));
 		goto out_unbind;
 	}
 
@@ -655,28 +673,213 @@ umich_gss_princ_to_grouplist(char *principal, gid_t *groups, int *ngroups,
 		goto out_unbind;
 	}
 
-	/*
-	 * Then determine the groups that uid (name) string is a member of
-	 */
-	err = -EINVAL;
-	if ((f_len = snprintf(filter, LDAP_FILT_MAXSIZ,
-			"(&(objectClass=%s)(%s=%s))",
-			ldap_map.NFSv4_group_objcls,
-			ldap_map.NFSv4_member_attr,
-			names[0])) == LDAP_FILT_MAXSIZ ) {
+        if (ldap_info.memberof_for_groups) {
+
+            /*
+             * Collect the groups the user belongs to
+             */
+            if ((f_len = snprintf(filter, LDAP_FILT_MAXSIZ,
+                        "(&(objectClass=%s)(%s=%s))",
+                        ldap_map.NFSv4_person_objcls,
+                        ldap_map.NFSv4_acctname_attr,
+                        names[0])) == LDAP_FILT_MAXSIZ ) {
+                IDMAP_LOG(2, ("ERROR: umich_gss_princ_to_grouplist: "
+                          "filter too long!\n"));
+                ldap_value_free(names);
+                goto out_unbind;
+            } 
+
+            ldap_value_free(names);
+
+            attrs[0] = ldap_map.NFSv4_member_of_attr;
+            attrs[1] = NULL;
+
+            err = ldap_search_st(ld, linfo->people_tree, LDAP_SCOPE_SUBTREE,
+                         filter, attrs, 0, &timeout, &result);
+
+            if (err) {
+                char *errmsg;
+
+                IDMAP_LOG(2, ("umich_gss_princ_to_grouplist: ldap_search_st "
+                          "for tree '%s, filter '%s': %s (%d)\n",
+                          linfo->people_tree, filter,
+                          ldap_err2string(err), err));
+                if ((ldap_get_option(ld, LDAP_OPT_ERROR_STRING, &errmsg) == LDAP_SUCCESS)
+                                && (errmsg != NULL) && (*errmsg != '\0')) {
+                        IDMAP_LOG(2, ("umich_gss_princ_to_grouplist: "
+                                   "Additional info: %s\n", errmsg));
+                        ldap_memfree(errmsg);
+                }
+                err = -ENOENT;
+                goto out_unbind;
+            }
+	    err = -ENOENT;
+
+            /* pull the list of groups and place into names */
+            count = ldap_count_entries(ld, result);
+            if (count != 1) {
+                IDMAP_LOG(2, ("umich_gss_princ_to_grouplist: "
+                    "ldap group member lookup of gssauthname %s returned %d multiple entries\n",
+                         principal,count));
+                goto out_unbind;
+            }
+
+            if (!(entry = ldap_first_entry(ld, result))) {
+                lerr = ldap_result2error(ld, result, 0);
+                IDMAP_LOG(2, ("umich_gss_princ_to_grouplist: ldap_first_entry: "
+                          "%s (%d)\n", ldap_err2string(lerr), lerr));
+                goto out_unbind;
+            }
+
+            if ((names = ldap_get_values(ld, result, attrs[0])) == NULL) {
+                lerr = ldap_result2error(ld, result, 0);
+                IDMAP_LOG(2, ("umich_gss_princ_to_grouplist: ldap_get_values: "
+                          "%s (%d)\n", ldap_err2string(lerr), lerr));
+                goto out_unbind;
+            }
+
+	    /*  Count the groups first before doing a lookup of the group.
+		If it exceeds the desired number of groups set the needed value
+		and abort. */
+	    for (i = 0; names[i] != NULL; i++);
+	    if ( i > *ngroups ) {
+		ldap_value_free(names);
+		err = -EINVAL;
+		IDMAP_LOG(2, ("umich_gss_princ_to_grouplist: User %s, "
+			  "number of groups %d, exceeds requested number %d\n",
+			  principal, i, *ngroups));
+		*ngroups = i;
+		goto out_unbind;
+            }
+
+            /* Loop through the groupnames (names) and get the group gid */
+	    num_gids = 0;
+            for (i = 0; names[i] != NULL; i++){
+	      char **vals;
+              int valcount;
+              unsigned long tmp_g;
+              gid_t tmp_gid;
+	      char *cnptr = NULL;
+
+		cnptr = strchr(names[i],',');
+		if (cnptr) *cnptr = '\0';
+
+		err = -ENOENT;
+		if (ldap_map.NFSv4_grouplist_filter) 
+        	    f_len = snprintf(filter, LDAP_FILT_MAXSIZ,
+                        "(&(objectClass=%s)(%s)%s)",
+                        ldap_map.NFSv4_group_objcls,
+                        names[i],
+			ldap_map.NFSv4_grouplist_filter);
+		else
+		    f_len = snprintf(filter, LDAP_FILT_MAXSIZ,
+                        "(&(objectClass=%s)(%s))",
+                        ldap_map.NFSv4_group_objcls,
+                        names[i]);
+
+		if ( f_len == LDAP_FILT_MAXSIZ ) {
+                		IDMAP_LOG(2, ("ERROR: umich_gss_princ_to_grouplist: "
+                          		"filter too long!\n"));
+                		ldap_value_free(names);
+                		goto out_unbind;
+        	}
+		attrs[0] = ldap_map.NFSv4_gid_attr;
+        	attrs[1] = NULL;
+
+        	err = ldap_search_st(ld, linfo->group_tree, LDAP_SCOPE_SUBTREE,
+                         filter, attrs, 0, &timeout, &result);
+		if (err) {
+                  char *errmsg;
+
+                	IDMAP_LOG(2, ("umich_gss_princ_to_grouplist: ldap_search_st "
+                          "for tree '%s, filter '%s': %s (%d)\n",
+                          linfo->group_tree, filter,
+                          ldap_err2string(err), err));
+                	if ((ldap_get_option(ld, LDAP_OPT_ERROR_STRING, &errmsg)==LDAP_SUCCESS) 
+						&&
+                                (errmsg != NULL) && (*errmsg != '\0')) {
+                        	IDMAP_LOG(2, ("umich_gss_princ_to_grouplist: "
+                                   "Additional info: %s\n", errmsg));
+                        	ldap_memfree(errmsg);
+                	}
+                	continue;
+        	}
+
+		count = ldap_count_entries(ld, result);
+		if (count == 0) 
+			continue;
+		if (count != 1 ){
+			IDMAP_LOG(2, ("umich_gss_princ_to_grouplist:"
+				"Group %s has %d gids defined - aborting", names[i], count));
+			ldap_value_free(names);
+			err = -ENOENT;
+			goto out_unbind;
+		}
+
+                vals = ldap_get_values(ld, result, ldap_map.NFSv4_gid_attr);
+
+                /* There should be only one gidNumber attribute per group */
+                if ((valcount = ldap_count_values(vals)) != 1) {
+                        IDMAP_LOG(2, ("DB problem getting gidNumber of "
+                                  "posixGroup! (count was %d)\n", valcount));
+			ldap_value_free(vals);
+                        continue;
+                }
+
+                tmp_g = strtoul(vals[0], (char **)NULL, 10);
+                tmp_gid = tmp_g;
+                if (tmp_gid != tmp_g ||
+                                (errno == ERANGE && tmp_g == ULONG_MAX)) {
+                        IDMAP_LOG(2, ("ERROR: umich_gss_princ_to_grouplist: "
+                                  "gidNumber too long converting '%s'\n",
+                                  vals[0]));
+                        ldap_value_free(vals);
+                        continue;
+                }
+                *curr_group++ = tmp_gid;
+		num_gids++;
+                ldap_value_free(vals);
+            }
+	    ldap_value_free(names);
+	    *ngroups = num_gids;
+	    err = 0;
+	} else {
+
+	    /*
+	     * Then determine the groups that uid (name) string is a member of
+	     */
+	    err = -EINVAL;
+	    if (ldap_map.NFSv4_grouplist_filter)
+	    	f_len = snprintf(filter, LDAP_FILT_MAXSIZ,
+                        "(&(objectClass=%s)(%s=%s)%s)",
+                        ldap_map.NFSv4_group_objcls,
+                        ldap_map.NFSv4_member_attr,
+                        names[0],
+			ldap_map.NFSv4_grouplist_filter);
+
+            else
+                f_len = snprintf(filter, LDAP_FILT_MAXSIZ,
+                        "(&(objectClass=%s)(%s=%s))",
+                        ldap_map.NFSv4_group_objcls,
+                        ldap_map.NFSv4_member_attr,
+                        names[0]);
+
+            if ( f_len == LDAP_FILT_MAXSIZ ) {
 		IDMAP_LOG(0, ("ERROR: umich_gss_princ_to_grouplist: "
 			  "filter too long!\n"));
 		ldap_value_free(names);
 		goto out_unbind;
-	}
-	ldap_value_free(names);
+	    }
 
-	attrs[0] = ldap_map.NFSv4_gid_attr;
-	attrs[1] = NULL;
+	    ldap_value_free(names);
 
-	err = ldap_search_st(ld, linfo->group_tree, LDAP_SCOPE_SUBTREE,
+	    attrs[0] = ldap_map.NFSv4_gid_attr;
+	    attrs[1] = NULL;
+
+            err = ldap_search_st(ld, linfo->group_tree, LDAP_SCOPE_SUBTREE,
 			 filter, attrs, 0, &timeout, &result);
-	if (err) {
+
+	    if (err) {
 		char *errmsg;
 
 		IDMAP_LOG(2, ("umich_gss_princ_to_grouplist: ldap_search_st "
@@ -691,35 +894,36 @@ umich_gss_princ_to_grouplist(char *principal, gid_t *groups, int *ngroups,
 		}
 		err = -ENOENT;
 		goto out_unbind;
-	}
+	    }
 
-	/*
-	 * If we can't determine count, return that error
-	 * If we have nothing to return, return success
-	 * If we have more than they asked for, tell them the
-	 * number required and return an error
-	 */
-	count = ldap_count_entries(ld, result);
-	if (count < 0) {
+	    /*
+	     * If we can't determine count, return that error
+	     * If we have nothing to return, return success
+	     * If we have more than they asked for, tell them the
+	     * number required and return an error
+	     */
+	    count = ldap_count_entries(ld, result);
+
+	    if (count < 0) {
 		err = count;
 		goto out_unbind;
-	}
-	if (count == 0) {
+	    }
+	    if (count == 0) {
 		*ngroups = 0;
 		err = 0;
 		goto out_unbind;
-	}
-	if (count > *ngroups) {
+	    }
+	    if (count > *ngroups) {
 		*ngroups = count;
 		err = -EINVAL;
 		goto out_unbind;
-	}
-	*ngroups = count;
+	    }
+	    *ngroups = count;
 
-	curr_group = groups;
+	    curr_group = groups;
 
-	err = -ENOENT;
-	for (entry = ldap_first_entry(ld, result);
+	    err = -ENOENT;
+	    for (entry = ldap_first_entry(ld, result);
 	     entry != NULL;
 	     entry = ldap_next_entry(ld, entry)) {
 
@@ -748,8 +952,10 @@ umich_gss_princ_to_grouplist(char *principal, gid_t *groups, int *ngroups,
 		}
 		*curr_group++ = tmp_gid;
 		ldap_value_free(vals);
+	    }
+	    err = 0;
 	}
-	err = 0;
+
 out_unbind:
 	ldap_unbind(ld);
 out:
@@ -888,7 +1094,7 @@ out_err:
 static int
 umichldap_init(void)
 {
-	char *tssl, *canonicalize;
+	char *tssl, *canonicalize, *memberof;
 	int missing_server = 0, missing_base = 0;
 	char missing_msg[128] = "";
 	char *server_in, *canon_name;
@@ -974,6 +1180,37 @@ umichldap_init(void)
 		conf_get_str_with_def(LDAP_SECTION, "GSS_principal_attr",
 				      DEFAULT_UMICH_ATTR_GSSAUTHNAME);
 	
+	ldap_map.NFSv4_grouplist_filter = 
+		conf_get_str_with_def(LDAP_SECTION, "NFSv4_grouplist_filter",
+				      NULL);
+
+	ldap_map.NFSv4_member_of_attr =
+		conf_get_str_with_def(LDAP_SECTION, "NFSv4_member_of_attr",
+				      DEFAULT_UMICH_ATTR_MEMBEROF);
+
+	ldap_info.ldap_timeout =
+		conf_get_num(LDAP_SECTION, "LDAP_timeout_seconds",
+                                      DEFAULT_UMICH_SEARCH_TIMEOUT);
+		
+
+ 	/*
+	 * Some LDAP servers do a better job with indexing where searching
+	 * through all the groups searching for the user in the memberuid
+	 * list.  Others like SunOne directory that search can takes minutes
+	 * if there are thousands of groups. So setting
+	 * LDAP_use_memberof_for_groups to true in the configuration file
+	 * will use the memberof lists of the account and search through
+	 * only those groups to obtain gids.
+	 */
+	memberof = conf_get_str_with_def(LDAP_SECTION,
+				"LDAP_use_memberof_for_groups", "false");
+        if ((strcasecmp(memberof, "true") == 0) ||
+            (strcasecmp(memberof, "on") == 0) ||
+            (strcasecmp(memberof, "yes") == 0))
+                ldap_info.memberof_for_groups = 1;
+        else
+                ldap_info.memberof_for_groups = 0;
+
 	/*
 	 * If they specified a search base for the
 	 * people tree or group tree we use that.
@@ -982,7 +1219,6 @@ umichldap_init(void)
 	 * that should already be specified.
 	 * this functions much like the NSS_LDAP modules
 	 */
-
 	if (ldap_info.people_tree == NULL || strlen(ldap_info.people_tree) == 0)
 		ldap_info.people_tree = ldap_info.base;
 	if (ldap_info.group_tree == NULL || strlen(ldap_info.group_tree) == 0)
@@ -1015,6 +1251,8 @@ umichldap_init(void)
 		  ldap_info.use_ssl ? "yes" : "no"));
 	IDMAP_LOG(1, ("umichldap_init: ca_cert : %s\n",
 		  ldap_info.ca_cert ? ldap_info.ca_cert : "<not-supplied>"));
+	IDMAP_LOG(1, ("umichldap_init: use_memberof_for_groups : %s\n",
+		  ldap_info.memberof_for_groups ? "yes" : "no"));
 
 	IDMAP_LOG(1, ("umichldap_init: NFSv4_person_objectclass : %s\n",
 		  ldap_map.NFSv4_person_objcls));
@@ -1032,6 +1270,11 @@ umichldap_init(void)
 		  ldap_map.NFSv4_group_nfsname_attr));
 	IDMAP_LOG(1, ("umichldap_init: NFSv4_member_attr        : %s\n",
 		  ldap_map.NFSv4_member_attr));
+	IDMAP_LOG(1, ("umichldap_init: NFSv4_member_of_attr     : %s\n",
+		  ldap_map.NFSv4_member_of_attr));
+	IDMAP_LOG(1, ("umichldap_init: NFSv4_grouplist_filter   : %s\n",
+		  ldap_map.NFSv4_grouplist_filter ?
+		  ldap_map.NFSv4_grouplist_filter : "<not-specified>"));
 	IDMAP_LOG(1, ("umichldap_init: GSS_principal_attr       : %s\n",
 		  ldap_map.GSS_principal_attr));
 	return 0;

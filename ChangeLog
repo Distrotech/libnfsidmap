@@ -48,3 +48,47 @@ Patch from Glenn Machin <GMachin@sandia.gov> to honor the buffer
 size in umich_id_to_name() before copying name into buffer.
 
 Fix a few memory leaks.
+2007-01-19:
+A patch from Glenn Machin <GMachin@sandia.gov>:
+
+There is also a problem with a 32 element subgroup. Given that a user
+can be in 30 to 150 groups here at Sandia we need to have some way to
+select the groups to use and not just hope the group in the ACE is one
+of the users first 32. So additional filtering is needed.  So attached
+is a patch to umich_ldap.c and libtest.c which does a number of things.
+All are controlled via attributes in the idmapd.conf file.
+
+Below is an explanation of the features:
+
+1) LDAP_use_memberof_for_groups (default is false)
+
+Setting this value to true changes the way
+umich_gss_princ_to_grouplist() goes about getting subgroup gids from the
+directory. When set to true the account memberof attributes are used to
+identify the user's groups, then each group is looked up to get the gid.
+The idmapd.conf attribute "NFSv4_member_of_attr = memberof"  specifies
+the person attribute to use to get the list of groups.
+
+2)  NFSv4_grouplist_filter  (default is NULL)
+
+This feature allows the admin to add a filter to
+umich_gss_princ_to_grouplist() when searching for the list of groups.
+This feature helps with the 32 group subgroup limit. Groups can be
+tagged with an attribute which this filter can use to restrict the
+groups to be used by the NFS server.  For instance we can tag groups
+with the attribute snlResource and have values set for specific services
+and machines. So for example if I set NFSv4_grouplist_filter to the
+value "(|(snlResource=machine:vmtest1)(snlResource=central_svc:CSTR))"
+
+I can restrict the groups to only those groups associated with the
+machine vmtest1 or the central service CSTR. This speeds up the search
+when LDAP_use_memberof_for_groups is false.  In fact this feature is
+more valuable than LDAP_use_memberof_for_groups so if you need to pick
+one to support I would ask you to consider this one.
+
+
+3)   LDAP_timeout_seconds  (default is 4)
+
+The allows you to change the tv_sec timeout used for the
+ldapsearch_st calls.
+

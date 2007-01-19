@@ -56,13 +56,15 @@ main(int ac, char **av)
 	char *name, *princ;
 	int err, uid = 0, gid = 0;
 	char name_buf[32];
+        int gids[1000];
+        int i, ngids;
 
 	if (ac != 3) {
 		printf("Usage: %s <user@nfsv4domain> <k5princ@REALM>\n",av[0]);
 		return 1;
 	}
 
-	nfs4_set_debug(0, NULL);
+	nfs4_set_debug(3, NULL);
 
 	name = av[1];
 	princ = av[2];
@@ -104,6 +106,17 @@ main(int ac, char **av)
 	else
 		printf("nfs4_name_to_gid: name %s has gid %d\n",
 			name, gid);
+
+        ngids = 1000;
+	err =  nfs4_gss_princ_to_grouplist("krb5", princ, gids, &ngids);
+        if (err){
+                printf(" nfs4_gss_princ_to_grouplist: error %d\n", err);
+        } else {
+                printf(" nfs4_gss_princ_to_grouplist: princ %s has gids ",
+                        princ);
+		for (i = 0; i < ngids; i++) printf("%d ", gids[i]);
+		printf("\n");
+	}
 
 #if 1
 	if (err) {
