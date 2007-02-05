@@ -99,16 +99,25 @@ static int nss_gid_to_name(gid_t gid, char *domain, char *name, size_t len)
 	struct group grbuf;
 	char *buf;
 	size_t buflen = sysconf(_SC_GETGR_R_SIZE_MAX);
-	int err = -ENOMEM;
+	int err;
 
-	buf = malloc(buflen);
-	if (!buf)
-		goto out;
 	if (domain == NULL)
 		domain = get_default_domain();
-	err = -getgrgid_r(gid, &grbuf, buf, buflen, &gr);
-	if (gr == NULL)
-		err = -ENOENT;
+
+	do {
+		err = -ENOMEM;
+		buf = malloc(buflen);
+		if (!buf)
+			goto out;
+		err = -getgrgid_r(gid, &grbuf, buf, buflen, &gr);
+		if (gr == NULL && !err)
+			err = -ENOENT;
+		if (err == -ERANGE) {
+			buflen *= 2;
+			free(buf);
+		}
+	} while (err == -ERANGE);
+			
 	if (err)
 		goto out_buf;
 	err = write_name(name, gr->gr_name, domain, len);
@@ -217,26 +226,34 @@ static int nss_name_to_gid(char *name, gid_t *gid)
 	struct group grbuf;
 	char *buf, *localname, *domain;
 	size_t buflen = sysconf(_SC_GETGR_R_SIZE_MAX);
-	int err = -ENOMEM;
+	int err = -EINVAL;
 
-	buf = malloc(buflen);
-	if (!buf)
-		goto out;
-	err = -EINVAL;
 	domain = get_default_domain();
 	localname = strip_domain(name, domain);
 	if (!localname)
-		goto out_buf;
-	err = -getgrnam_r(localname, &grbuf, buf, buflen, &gr);
-	if (gr == NULL)
-		err = -ENOENT;
+		goto out;
+
+	do {
+		err = -ENOMEM;
+		buf = malloc(buflen);
+		if (!buf)
+			goto out_name;
+		err = -getgrnam_r(localname, &grbuf, buf, buflen, &gr);
+		if (gr == NULL && !err)
+			err = -ENOENT;
+		if (err == -ERANGE) {
+			buflen *= 2;
+			free(buf);
+		}
+	} while (err == -ERANGE);
+
 	if (err)
-		goto out_name;
+		goto out_buf;
 	*gid = gr->gr_gid;
-out_name:
-	free(localname);
 out_buf:
 	free(buf);
+out_name:
+	free(localname);
 out:
 	return err;
 }
