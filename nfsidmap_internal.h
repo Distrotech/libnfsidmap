@@ -36,6 +36,7 @@
  */
 
 char *get_default_domain(void);
+struct conf_list *get_local_realms(void);
 
 typedef struct trans_func * (*libnfsidmap_plugin_init_t)(void);
 

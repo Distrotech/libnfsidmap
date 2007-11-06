@@ -54,6 +54,7 @@
 #include "cfg.h"
 
 static char *default_domain;
+static struct conf_list *local_realms;
 int idmap_verbosity = 0;
 static struct trans_func *trans = NULL;
 
@@ -128,6 +129,8 @@ int nfs4_init_name_mapping(char *conffile)
 	int ret;
 	char *method;
 	int dflt = 0;
+	struct conf_list *realms;
+	struct conf_list_node *node;
 
 	/* XXX: need to be able to reload configurations... */
 	if (trans) /* already succesfully initialized */
@@ -150,6 +153,8 @@ int nfs4_init_name_mapping(char *conffile)
 	}
 	IDMAP_LOG(1, ("libnfsidmap: using%s domain: %s\n",
 		(dflt ? " (default)" : ""), default_domain));
+
+	local_realms = conf_get_list("General", "Local-Realms");
 
 	method = conf_get_str_with_def("Translation", "Method", "nsswitch");
 	if (load_translation_plugin(method) == -1) {
@@ -183,6 +188,11 @@ char * get_default_domain(void)
 		default_domain = "";
 	}
 	return default_domain;
+}
+
+struct conf_list *get_local_realms(void)
+{
+	return local_realms;
 }
 
 int
