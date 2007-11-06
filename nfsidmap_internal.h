@@ -37,6 +37,8 @@
 
 char *get_default_domain(void);
 
+typedef struct trans_func * (*libnfsidmap_plugin_init_t)(void);
+
 struct trans_func {
 	char *name;
 	int (*init)(void);

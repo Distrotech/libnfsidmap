@@ -40,6 +40,7 @@
 #include <errno.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
 #include <pwd.h>
 #include <grp.h>
@@ -47,14 +48,18 @@
 #include <err.h>
 #include <syslog.h>
 #include <stdarg.h>
+#include <dlfcn.h>
 #include "nfsidmap.h"
 #include "nfsidmap_internal.h"
 #include "cfg.h"
 
-/* forward declarations */
-int set_trans_method(char *);
-
 static char *default_domain;
+int idmap_verbosity = 0;
+static struct trans_func *trans = NULL;
+
+#define PLUGIN_PREFIX "libnfsidmap_"
+#define PLUGIN_INIT_FUNC "libnfsidmap_plugin_init"
+
 
 #ifndef PATH_IDMAPDCONF
 #define PATH_IDMAPDCONF "/etc/idmapd.conf"
@@ -69,9 +74,7 @@ static void default_logger(const char *fmt, ...)
 	vsyslog(LOG_WARNING, fmt, vp); 
 	va_end(vp);
 }
-
 nfs4_idmap_log_function_t idmap_log_func = default_logger;
-int idmap_verbosity = 0;
 
 static int domain_from_dns(char **domain)
 {
@@ -88,7 +91,37 @@ static int domain_from_dns(char **domain)
 	return 0;
 }
 
-static struct trans_func *trans = NULL;
+static int load_translation_plugin(char *method) 
+{
+	void *dl;
+	libnfsidmap_plugin_init_t init_func;
+	char plgname[128];
+
+	snprintf(plgname, sizeof(plgname), "%s%s.so", PLUGIN_PREFIX, method);
+
+	dl = dlopen(plgname, RTLD_NOW | RTLD_LOCAL);
+	if (dl == NULL) {
+		IDMAP_LOG(1, ("libnfsidmap: Unable to load plugin: %s\n",
+			  dlerror()));
+		return -1;
+	}
+	init_func = (libnfsidmap_plugin_init_t) dlsym(dl, PLUGIN_INIT_FUNC);
+	if (init_func == NULL) {
+		IDMAP_LOG(1, ("libnfsidmap: Unable to get init function: %s\n",
+			  dlerror()));
+		dlclose(dl);
+		return -1;
+	}
+	trans = init_func();
+	if (trans == NULL) {
+		IDMAP_LOG(1, ("libnfsidmap: Failed to initialize plugin %s\n", 
+			  PLUGIN_INIT_FUNC, plgname));
+		dlclose(dl);
+		return -1;
+	}
+
+	return 0;
+}
 
 int nfs4_init_name_mapping(char *conffile)
 {
@@ -119,7 +152,7 @@ int nfs4_init_name_mapping(char *conffile)
 		(dflt ? " (default)" : ""), default_domain));
 
 	method = conf_get_str_with_def("Translation", "Method", "nsswitch");
-	if (set_trans_method(method) == -1) {
+	if (load_translation_plugin(method) == -1) {
 		IDMAP_LOG(0, ("libnfsidmap: requested tranlation method, "
 			 "'%s', is not available\n", method));
 		return -1;
@@ -161,32 +194,6 @@ nfs4_get_default_domain(char *server, char *domain, size_t len)
 		return -ERANGE;
 	strcpy(domain, d);
 	return 0;
-}
-
-extern struct trans_func nss_trans;
-extern struct trans_func umichldap_trans;
-
-static struct trans_func * t_array[] = {
-	&nss_trans,
-#ifdef ENABLE_LDAP
-	&umichldap_trans,
-#endif
-};
-#define TR_SIZE (sizeof(t_array)/sizeof(*t_array))
-
-int
-set_trans_method(char *method)
-{
-	int i;
-
-	trans = NULL;
-	for (i = 0; i < TR_SIZE; i++) {
-		if (strcmp(t_array[i]->name, method) == 0) {
-			trans = t_array[i];
-			return 0;
-		}
-	}
-	return -1;
 }
 
 int nfs4_uid_to_name(uid_t uid, char *domain, char *name, size_t len)

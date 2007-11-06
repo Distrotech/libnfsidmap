@@ -22,11 +22,11 @@ if test "x$enable_ldap" != "xno" ; then
 		[have_ldap="no"])
 	if test "x$have_ldap" = "xyes" ; then
 		AC_DEFINE([ENABLE_LDAP], 1, [Enable LDAP Support])
-		LIBS="$LIBS -lldap"
 	elif test "x$enable_ldap$have_ldap" = "xyesno" ; then
 		AC_MSG_ERROR(LDAP support not found!)
 	fi
 fi
+AM_CONDITIONAL(ENABLE_LDAP, test "x$have_ldap" = "xyes")
 
 # Checks for header files.
 AC_HEADER_STDC

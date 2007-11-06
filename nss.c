@@ -313,3 +313,8 @@ struct trans_func nss_trans = {
 	.gid_to_name	= nss_gid_to_name,
 	.gss_princ_to_grouplist = nss_gss_princ_to_grouplist,
 };
+
+struct trans_func *libnfsidmap_plugin_init() 
+{
+	return (&nss_trans);
+}

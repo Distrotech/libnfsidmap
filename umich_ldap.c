@@ -1296,4 +1296,8 @@ struct trans_func umichldap_trans = {
 	.gss_princ_to_grouplist = umichldap_gss_princ_to_grouplist,
 };
 
+struct trans_func *libnfsidmap_plugin_init() 
+{
+	return (&umichldap_trans);
+}
 #endif
