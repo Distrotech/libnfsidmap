@@ -56,7 +56,8 @@
 static char *default_domain;
 static struct conf_list *local_realms;
 int idmap_verbosity = 0;
-static struct trans_func *trans = NULL;
+static struct mapping_plugin **nfs4_plugins = NULL;
+static struct mapping_plugin **gss_plugins = NULL;
 
 #define PLUGIN_PREFIX "libnfsidmap_"
 #define PLUGIN_INIT_FUNC "libnfsidmap_plugin_init"
@@ -92,9 +93,10 @@ static int domain_from_dns(char **domain)
 	return 0;
 }
 
-static int load_translation_plugin(char *method) 
+static int load_translation_plugin(char *method, struct mapping_plugin *plgn) 
 {
-	void *dl;
+	void *dl = NULL;
+	struct trans_func *trans = NULL;
 	libnfsidmap_plugin_init_t init_func;
 	char plgname[128];
 
@@ -120,20 +122,81 @@ static int load_translation_plugin(char *method)
 		dlclose(dl);
 		return -1;
 	}
+	plgn->dl_handle = dl;
+	plgn->trans = trans;
+	IDMAP_LOG(1, ("libnfsidmap: loaded plugin %s for method %s\n", 
+		  plgname, method));
 
 	return 0;
 }
 
+static void unload_plugins(struct mapping_plugin **plgns) 
+{
+	int i;
+	for(i = 0; plgns[i] != NULL; i++) {
+		if (plgns[i]->dl_handle && dlclose(plgns[i]->dl_handle)) 
+			IDMAP_LOG(0, ("WARNING: libnfsidmap: failed to "
+				  "unload plugin for method = %s\n", 
+				  plgns[i]->trans->name));
+		free(plgns[i]);
+	}
+	free(plgns);
+}
+
+static int load_plugins(struct conf_list *methods, 
+			struct mapping_plugin ***plugins)
+{
+	int ret = -1, i = 0;
+	struct mapping_plugin **plgns;
+	struct conf_list_node *m;
+
+	plgns = malloc((methods->cnt + 1) * sizeof(struct mapping_plugin *));
+	if (plgns == NULL)
+		return -1;
+	plgns[methods->cnt] = NULL;
+	for(m = TAILQ_FIRST(&methods->fields), i = 0; m; 
+	    m = TAILQ_NEXT(m, link), i++) {
+		plgns[i] = malloc(sizeof(struct mapping_plugin));
+		if (plgns[i] == NULL) 
+			goto out;
+		if (load_translation_plugin(m->field, plgns[i]) == -1) {
+			IDMAP_LOG(0, ("libnfsidmap: requested translation "
+				  "method, '%s', is not available\n", 
+				  m->field));
+			goto out;
+		}
+	}
+	ret = 0;
+	*plugins = plgns;
+out:
+	if (ret) {
+		int k;
+		for(k = 0; k < i; k++) {
+			dlclose(plgns[i]->dl_handle);
+			free(plgns[i]);
+		}
+		free(plgns);
+	}
+	return ret;
+}
+int nfs4_cleanup_name_mapping() 
+{
+	if (nfs4_plugins)
+		unload_plugins(nfs4_plugins);
+	if (gss_plugins)
+		unload_plugins(gss_plugins);
+	nfs4_plugins = gss_plugins = NULL;
+}
+
 int nfs4_init_name_mapping(char *conffile)
 {
-	int ret;
+	int ret = -1;
 	char *method;
 	int dflt = 0;
-	struct conf_list *realms;
-	struct conf_list_node *node;
+	struct conf_list *nfs4_methods, *gss_methods;
 
 	/* XXX: need to be able to reload configurations... */
-	if (trans) /* already succesfully initialized */
+	if (nfs4_plugins) /* already succesfully initialized */
 		return 0;
 	if (conffile)
 		conf_path = conffile;
@@ -156,23 +219,40 @@ int nfs4_init_name_mapping(char *conffile)
 
 	local_realms = conf_get_list("General", "Local-Realms");
 
-	method = conf_get_str_with_def("Translation", "Method", "nsswitch");
-	if (load_translation_plugin(method) == -1) {
-		IDMAP_LOG(0, ("libnfsidmap: requested tranlation method, "
-			 "'%s', is not available\n", method));
-		return -1;
-	}
-	IDMAP_LOG(1, ("libnfsidmap: using translation method: %s\n", method)); 
+	nfs4_methods = conf_get_list("Translation", "Method");
+	if (nfs4_methods) {
+		if (load_plugins(nfs4_methods, &nfs4_plugins) == -1)
+			return -1;
+	} else {
+		struct conf_list list;
+		struct conf_list_node node;
 
-	if (trans->init) {
-		ret = trans->init();
-		if (ret) {
-			trans = NULL;
-			return ret;
-		}
+		TAILQ_INIT(&list.fields);
+		list.cnt = 1;
+		node.field = "nsswitch";
+		TAILQ_INSERT_TAIL (&list.fields, &node, link);
+
+		if (load_plugins(&list, &nfs4_plugins) == -1)
+			return -1;
 	}
 
-	return 0;
+	gss_methods = conf_get_list("Translation", "GSS-Methods");
+	if (gss_methods) {
+		if (load_plugins(gss_methods, &gss_plugins) == -1) 
+			goto out;
+	}
+	ret = 0; 
+out:
+	if (ret) {
+		if (nfs4_plugins) 
+			unload_plugins(nfs4_plugins);
+		if (gss_plugins) 
+			unload_plugins(gss_plugins);
+		nfs4_plugins = gss_plugins = NULL;	
+	}
+	
+	return ret;
+
 }
 
 char * get_default_domain(void)
@@ -208,70 +288,118 @@ nfs4_get_default_domain(char *server, char *domain, size_t len)
 
 int nfs4_uid_to_name(uid_t uid, char *domain, char *name, size_t len)
 {
-	int ret;
+	int ret, i;
 
 	ret = nfs4_init_name_mapping(NULL);
 	if (ret)
 		return ret;
-	return trans->uid_to_name(uid, domain, name, len);
+	for (i = 0; nfs4_plugins[i] != NULL; i++) {
+		if (nfs4_plugins[i]->trans->uid_to_name) {
+			ret = nfs4_plugins[i]->trans->uid_to_name(uid, domain, 
+				name, len);
+			if (!ret)
+				break;
+		}
+	}
+	return ret;
 }
 
 int nfs4_gid_to_name(gid_t gid, char *domain, char *name, size_t len)
 {
-	int ret;
+	int ret, i;
 
 	ret = nfs4_init_name_mapping(NULL);
 	if (ret)
 		return ret;
-	return trans->gid_to_name(gid, domain, name, len);
+	for (i = 0; nfs4_plugins[i] != NULL; i++) {
+		if (nfs4_plugins[i]->trans->gid_to_name) {
+			ret = nfs4_plugins[i]->trans->gid_to_name(gid, domain, 
+				name, len);
+			if (!ret)
+				break;
+		}
+	}
+	return ret;
 }
 
 int nfs4_name_to_uid(char *name, uid_t *uid)
 {
-	int ret;
+	int ret, i;
 
 	ret = nfs4_init_name_mapping(NULL);
 	if (ret)
-		goto out;
-	ret = trans->name_to_uid(name, uid);
-  out:
+		return ret;
+	for (i = 0; nfs4_plugins[i] != NULL; i++) { 
+		if (nfs4_plugins[i]->trans->name_to_uid) {
+			ret = nfs4_plugins[i]->trans->name_to_uid(name, uid);
+			if (!ret)
+				break;
+		}
+	}
   	return ret;
 }
 
 int nfs4_name_to_gid(char *name, gid_t *gid)
 {
-	int ret;
+	int ret, i;
 
 	ret = nfs4_init_name_mapping(NULL);
 	if (ret)
-		goto out;
-	ret = trans->name_to_gid(name, gid);
-  out:
+		return ret;
+	for (i = 0; nfs4_plugins[i] != NULL; i++) {
+		if (nfs4_plugins[i]->trans->name_to_gid) {
+			ret = nfs4_plugins[i]->trans->name_to_gid(name, gid);
+			if (!ret)
+				break;
+		}
+	}
   	return ret;
 }
 
 int nfs4_gss_princ_to_ids(char *secname, char *princ, uid_t *uid, gid_t *gid)
 {
-	int ret;
+	int ret, i;
+	struct mapping_plugin **plgns;
 
 	ret = nfs4_init_name_mapping(NULL);
 	if (ret)
-		goto out;
-	ret = trans->princ_to_ids(secname, princ, uid, gid);
-  out:
+		return ret;
+	if (gss_plugins) 
+		plgns = gss_plugins;
+	else
+		plgns = nfs4_plugins;
+	for (i = 0; plgns[i] != NULL; i++) {
+		if (plgns[i]->trans->princ_to_ids) {
+			ret = plgns[i]->trans->princ_to_ids(secname, princ, 
+				uid, gid);
+			if (!ret)
+				break;
+		}
+	}
 	return ret;
 }
 
 int nfs4_gss_princ_to_grouplist(char *secname, char *princ,
 		gid_t *groups, int *ngroups)
 {
-	int ret;
+	int ret, i;
+	struct mapping_plugin **plgns;
 
 	ret = nfs4_init_name_mapping(NULL);
 	if (ret)
-		goto out;
-	ret =  trans->gss_princ_to_grouplist(secname, princ, groups, ngroups);
-  out:
+		return ret;
+	if (gss_plugins)
+		plgns = gss_plugins;
+	else
+		plgns = nfs4_plugins;
+	for (i = 0; plgns[i] != NULL; i++) {
+		if (plgns[i]->trans->gss_princ_to_grouplist) {
+			ret = plgns[i]->trans->gss_princ_to_grouplist(secname, 
+				princ, groups, ngroups);
+			if (!ret)
+				break;
+		}
+	}
   	return ret;
 }
 

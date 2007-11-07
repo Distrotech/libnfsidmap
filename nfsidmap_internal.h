@@ -51,6 +51,11 @@ struct trans_func {
 	int (*gss_princ_to_grouplist)(char *secname, char *princ, gid_t *groups, int *ngroups);
 };
 
+struct mapping_plugin {
+	void *dl_handle;
+	struct trans_func *trans;
+};
+
 typedef enum {
 	IDTYPE_USER = 1,
 	IDTYPE_GROUP = 2
