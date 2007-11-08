@@ -371,7 +371,7 @@ int nfs4_gss_princ_to_ids(char *secname, char *princ, uid_t *uid, gid_t *gid)
 	for (i = 0; plgns[i] != NULL; i++) {
 		if (plgns[i]->trans->princ_to_ids) {
 			ret = plgns[i]->trans->princ_to_ids(secname, princ, 
-				uid, gid);
+				uid, gid, NULL);
 			if (!ret)
 				break;
 		}
@@ -380,7 +380,7 @@ int nfs4_gss_princ_to_ids(char *secname, char *princ, uid_t *uid, gid_t *gid)
 }
 
 int nfs4_gss_princ_to_grouplist(char *secname, char *princ,
-		gid_t *groups, int *ngroups)
+				gid_t *groups, int *ngroups)
 {
 	int ret, i;
 	struct mapping_plugin **plgns;
@@ -395,7 +395,55 @@ int nfs4_gss_princ_to_grouplist(char *secname, char *princ,
 	for (i = 0; plgns[i] != NULL; i++) {
 		if (plgns[i]->trans->gss_princ_to_grouplist) {
 			ret = plgns[i]->trans->gss_princ_to_grouplist(secname, 
-				princ, groups, ngroups);
+				princ, groups, ngroups, NULL);
+			if (!ret)
+				break;
+		}
+	}
+  	return ret;
+}
+
+int nfs4_gss_princ_to_ids_ex(char *secname, char *princ, uid_t *uid, 
+			     gid_t *gid, extra_mapping_params *ex)
+{
+	int ret, i;
+	struct mapping_plugin **plgns;
+
+	ret = nfs4_init_name_mapping(NULL);
+	if (ret)
+		return ret;
+	if (gss_plugins) 
+		plgns = gss_plugins;
+	else
+		plgns = nfs4_plugins;
+	for (i = 0; plgns[i] != NULL; i++) {
+		if (plgns[i]->trans->princ_to_ids) {
+			ret = plgns[i]->trans->princ_to_ids(secname, princ, 
+				uid, gid, ex);
+			if (!ret)
+				break;
+		}
+	}
+	return ret;
+}
+
+int nfs4_gss_princ_to_grouplist_ex(char *secname, char *princ, gid_t *groups, 
+				   int *ngroups, extra_mapping_params *ex)
+{
+	int ret, i;
+	struct mapping_plugin **plgns;
+
+	ret = nfs4_init_name_mapping(NULL);
+	if (ret)
+		return ret;
+	if (gss_plugins)
+		plgns = gss_plugins;
+	else
+		plgns = nfs4_plugins;
+	for (i = 0; plgns[i] != NULL; i++) {
+		if (plgns[i]->trans->gss_princ_to_grouplist) {
+			ret = plgns[i]->trans->gss_princ_to_grouplist(secname, 
+				princ, groups, ngroups, ex);
 			if (!ret)
 				break;
 		}

@@ -969,7 +969,7 @@ out:
  */
 static int
 umichldap_gss_princ_to_ids(char *secname, char *principal,
-			   uid_t *uid, gid_t *gid)
+			   uid_t *uid, gid_t *gid, extra_mapping_params *ex)
 {
 	uid_t rtnd_uid = -1;
 	gid_t rtnd_gid = -1;
@@ -1024,7 +1024,7 @@ umichldap_gid_to_name(gid_t gid, char *domain, char *name, size_t len)
 
 static int
 umichldap_gss_princ_to_grouplist(char *secname, char *principal,
-		gid_t *groups, int *ngroups)
+		gid_t *groups, int *ngroups, extra_mapping_params *ex)
 {
 	int err = -EINVAL;
 

@@ -37,6 +37,15 @@
 
 /* XXX arbitrary */
 #define NFS4_MAX_DOMAIN_LEN 512
+typedef enum {
+	X509_CERT = 1
+} exra_types;
+	
+typedef struct _extra_mapping_params {
+	void *content;
+	int content_type;
+	int content_len;
+} extra_mapping_params;
 
 typedef void (*nfs4_idmap_log_function_t)(const char *, ...);
 
@@ -48,4 +57,6 @@ int nfs4_name_to_uid(char *name, uid_t *uid);
 int nfs4_name_to_gid(char *name, gid_t *gid);
 int nfs4_gss_princ_to_ids(char *secname, char *princ, uid_t *uid, gid_t *gid);
 int nfs4_gss_princ_to_grouplist(char *secname, char *princ, gid_t *groups, int *ngroups);
+int nfs4_gss_princ_to_ids_ex(char *secname, char *princ, uid_t *uid, gid_t *gid, extra_mapping_params *ex);
+int nfs4_gss_princ_to_grouplist_ex(char *secname, char *princ, gid_t *groups, int *ngroups, extra_mapping_params *ex);
 void nfs4_set_debug(int dbg_level, nfs4_idmap_log_function_t dbg_logfunc);
