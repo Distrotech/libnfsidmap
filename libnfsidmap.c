@@ -99,6 +99,7 @@ static int load_translation_plugin(char *method, struct mapping_plugin *plgn)
 	struct trans_func *trans = NULL;
 	libnfsidmap_plugin_init_t init_func;
 	char plgname[128];
+	int ret = 0;
 
 	snprintf(plgname, sizeof(plgname), "%s%s.so", PLUGIN_PREFIX, method);
 
@@ -121,6 +122,15 @@ static int load_translation_plugin(char *method, struct mapping_plugin *plgn)
 			  PLUGIN_INIT_FUNC, plgname));
 		dlclose(dl);
 		return -1;
+	}
+	if (trans->init) {
+		ret = trans->init();
+		if (ret) {
+			IDMAP_LOG(1, ("libnfsidmap: Failed in %s's init(), "
+					"returned %d\n", plgname, ret));
+			dlclose(dl);
+			return -1;
+		}
 	}
 	plgn->dl_handle = dl;
 	plgn->trans = trans;
@@ -404,7 +414,7 @@ int nfs4_gss_princ_to_grouplist(char *secname, char *princ,
 }
 
 int nfs4_gss_princ_to_ids_ex(char *secname, char *princ, uid_t *uid, 
-			     gid_t *gid, extra_mapping_params *ex)
+			     gid_t *gid, extra_mapping_params **ex)
 {
 	int ret, i;
 	struct mapping_plugin **plgns;
@@ -428,7 +438,7 @@ int nfs4_gss_princ_to_ids_ex(char *secname, char *princ, uid_t *uid,
 }
 
 int nfs4_gss_princ_to_grouplist_ex(char *secname, char *princ, gid_t *groups, 
-				   int *ngroups, extra_mapping_params *ex)
+				   int *ngroups, extra_mapping_params **ex)
 {
 	int ret, i;
 	struct mapping_plugin **plgns;

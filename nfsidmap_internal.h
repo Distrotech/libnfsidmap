@@ -44,13 +44,13 @@ struct trans_func {
 	char *name;
 	int (*init)(void);
 	int (*princ_to_ids)(char *secname, char *princ, uid_t *uid, gid_t *gid, 
-		extra_mapping_params *ex);
+		extra_mapping_params **ex);
 	int (*name_to_uid)(char *name, uid_t *uid);
 	int (*name_to_gid)(char *name, gid_t *gid);
 	int (*uid_to_name)(uid_t uid, char *domain, char *name, size_t len);
 	int (*gid_to_name)(gid_t gid, char *domain, char *name, size_t len);
 	int (*gss_princ_to_grouplist)(char *secname, char *princ, gid_t *groups,
-		int *ngroups, extra_mapping_params *ex);
+		int *ngroups, extra_mapping_params **ex);
 };
 
 struct mapping_plugin {

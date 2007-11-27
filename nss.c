@@ -268,13 +268,16 @@ out:
 
 static int nss_gss_princ_to_ids(char *secname, char *princ,
 				uid_t *uid, uid_t *gid, 
-				extra_mapping_params *ex)
+				extra_mapping_params **ex)
 {
 	struct passwd *pw;
 	int err = 0;
 	char *princ_realm;
 	struct conf_list *realms;
 	struct conf_list_node *r;
+
+	if (!strcmp(secname, "spkm3"))
+		return -ENOENT;
 
 	if (strcmp(secname, "krb5") != 0)
 		return -EINVAL;
@@ -322,7 +325,7 @@ out:
 
 int nss_gss_princ_to_grouplist(char *secname, char *princ,
 			       gid_t *groups, int *ngroups, 
-			       extra_mapping_params *ex)
+			       extra_mapping_params **ex)
 {
 	struct passwd *pw;
 	int ret = -EINVAL;
