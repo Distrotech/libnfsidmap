@@ -512,7 +512,10 @@ umich_id_to_name(uid_t id, int idtype, char **name, size_t len,
 	if (ldap_init_and_bind(&ld, &sizelimit, linfo))
 		goto out;
 
-	attrs[0] = ldap_map.NFSv4_nfsname_attr;
+	if (idtype == IDTYPE_USER)
+		attrs[0] = ldap_map.NFSv4_nfsname_attr;
+	else
+		attrs[0] = ldap_map.NFSv4_group_nfsname_attr;
 	attrs[1] = NULL;
 
 	err = ldap_search_st(ld, base, LDAP_SCOPE_SUBTREE,
