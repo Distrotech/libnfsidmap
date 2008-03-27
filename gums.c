@@ -93,14 +93,14 @@ static void my_VOMS_Delete(struct voms *v)
 	if (v->server)
 		free(v->server);
 	if (v->fqan) {
-		for(i = 0; v->fqan[i] != NULL; i++) 
+		for (i = 0; v->fqan[i] != NULL; i++)
 			free(v->fqan[i]);
 		free(v->fqan);
 	}
 	free(v);
 }
 
-static struct voms *my_VOMS_Copy(struct voms *v, int *err) 
+static struct voms *my_VOMS_Copy(struct voms *v, int *err)
 {
 	struct voms *cv;
 	int i;
@@ -114,24 +114,24 @@ static struct voms *my_VOMS_Copy(struct voms *v, int *err)
 	cv->server = strdup(v->server);
 	if (cv->server == NULL)
 		goto out;
-	for(i = 0; v->fqan[i] != NULL; i++) {
+	for (i = 0; v->fqan[i] != NULL; i++) {
 		if (v->fqan[i] == NULL)
 			break;
 	}
 	cv->fqan = calloc(i+1, sizeof(char *));
 	if (cv->fqan == NULL)
-		goto out;	
+		goto out;
 	cv->fqan[i] = NULL;
-	for(i = 0; v->fqan[i] != NULL; i++) {
+	for (i = 0; v->fqan[i] != NULL; i++) {
 		cv->fqan[i] = strdup(v->fqan[i]);
 		if (cv->fqan[i] == NULL)
 			goto out;
 	}
 	return cv;
 out:
-	if (cv) 
+	if (cv)
 		my_VOMS_Delete(cv);
-		
+
 	return NULL;
 }
 #endif
@@ -204,7 +204,7 @@ static void free_plugin_config_params()
 	conf.voms_dir = NULL;
 }
 
-static int validate_plugin_config_params() 
+static int validate_plugin_config_params()
 {
 	if (conf.saml_schema_dir == NULL ||
 		conf.server_cert == NULL ||
@@ -225,13 +225,13 @@ static int validate_plugin_config_params()
 	return 0;
 }
 
-static int gums_init(void) 
+static int gums_init(void)
 {
 	FILE *f = NULL;
 	int ret = -1, i = 0;
 	char buf[512], type[128], value[256];
 	char *alt_conf = NULL;
-	
+
 	alt_conf = conf_get_str("GUMS", "Conf_File");
 	if (alt_conf == NULL)
 		f = fopen(prima_conf, "r");
@@ -268,7 +268,7 @@ static int gums_init(void)
 				conf.saml_log_level = PRIMA_LOG_ERROR;
 			else if (strncmp(value, "none", 4) == 0)
 				conf.saml_log_level = PRIMA_LOG_NONE;
-			else 
+			else
 				conf.saml_log_level = PRIMA_LOG_INFO;
 		}
 	}
@@ -280,18 +280,18 @@ static int gums_init(void)
 out:
 	if (f)
 		fclose(f);
-	if (ret) 
+	if (ret)
 		free_plugin_config_params();
 
 	return ret;
 }
 
 static int retrieve_attributes(X509 *cert, STACK_OF(X509) *cas,
-			       struct voms **attrs) 
+			       struct voms **attrs)
 {
 	int ret = -1, err = 0;
 	struct vomsdata *vd = NULL;
-	
+
 	vd = VOMS_Init(conf.voms_dir, conf.ca_dir);
 	if (vd == NULL) {
 		IDMAP_LOG(0, ("VOMS_Init failed\n"));
@@ -301,7 +301,7 @@ static int retrieve_attributes(X509 *cert, STACK_OF(X509) *cas,
 	if (err) {
 		char *err_msg;
 		err_msg = VOMS_ErrorMessage(vd, err, NULL, 0);
-		if (err == VERR_NOEXT) 
+		if (err == VERR_NOEXT)
 			ret = 0;
 		else
 			IDMAP_LOG(0, ("VOMS error %s\n", err_msg));
@@ -326,14 +326,14 @@ static int retrieve_attributes(X509 *cert, STACK_OF(X509) *cas,
 			if (v2 == NULL) {
 				IDMAP_LOG(0, ("VOMS_Copy failed err=%d\n", err));
 				goto out;
-			} 
-			*attrs = v2;	
+			}
+			*attrs = v2;
 		}
 	}
 	ret = 0;
 out:
-	if (vd) 
-		VOMS_Destroy(vd);		
+	if (vd)
+		VOMS_Destroy(vd);
 	return ret;
 }
 
@@ -347,7 +347,7 @@ static int get_server_dn(unsigned char **server_dn)
 	tmp = BIO_new(BIO_s_file());
 	if (tmp == NULL)
 		goto out;
-	
+
 	ret = BIO_read_filename(tmp, conf.server_cert);
 	if (ret == 0) {
 		ret = errno;
@@ -355,11 +355,11 @@ static int get_server_dn(unsigned char **server_dn)
 	}
 
 	cert = (X509 *) PEM_read_bio_X509(tmp, NULL, NULL, NULL);
-	if (cert == NULL) 
+	if (cert == NULL)
 		goto out;
 
 	X509_NAME_oneline(X509_get_subject_name(cert), dn, sizeof(dn));
-	
+
 	*server_dn = strdup(dn);
 	if (*server_dn == NULL)
 		goto out;
@@ -374,7 +374,7 @@ out:
 	return ret;
 }
 
-static int create_saml_request(char *dn, struct voms *attrs, char **saml_req) 
+static int create_saml_request(char *dn, struct voms *attrs, char **saml_req)
 {
 	int ret = -1, i;
 	char *req = NULL;
@@ -398,15 +398,15 @@ static int create_saml_request(char *dn, struct voms *attrs, char **saml_req)
 		IDMAP_LOG(1, ("No VOMS attributes present in the cert\n"));
 
 	if (get_server_dn(&server_dn) != 0)
-		goto out;		
+		goto out;
 	req = createSAMLQueryAndRequest(server_dn, dn, &fqans);
 	if (req == NULL) {
 		IDMAP_LOG(0, ("createSAMLQueryAndRequest failed to create "
 			"SAML request\n"));
 		goto out;
-	}  
+	}
  	IDMAP_LOG(1, ("SAML Request %s\n", req));
- 	
+ 
 	ret = 0;
 	*saml_req = req;
 out:
@@ -419,7 +419,7 @@ out:
 	return ret;
 }
 
-static int process_parameters(extra_mapping_params **ex, X509 **user_cert, 
+static int process_parameters(extra_mapping_params **ex, X509 **user_cert,
 				STACK_OF(X509) **user_chain)
 {
 
@@ -442,7 +442,7 @@ static int process_parameters(extra_mapping_params **ex, X509 **user_cert,
 	if (chain == NULL)
 		goto out;
 	for (i = 1; ex[i] != NULL; i++) {
-		if (ex[i]->content_type != X509_CERT) 
+		if (ex[i]->content_type != X509_CERT)
 			continue;
 		p = ex[i]->content;
 		x = d2i_X509(NULL, &p, ex[i]->content_len);
@@ -453,19 +453,19 @@ static int process_parameters(extra_mapping_params **ex, X509 **user_cert,
 	ret = 0;
 
 	*user_cert = cert;
-	*user_chain = chain;	
+	*user_chain = chain;
 out:
 	if (ret) {
 		int num;
 		if (cert)
 			X509_free(cert);
-		if (chain) 
+		if (chain)
 			sk_X509_pop_free(chain, X509_free);
 	}
 
 	return ret;
 }
- 
+
 struct pwbuf {
         struct passwd pwbuf;
         char buf[1];
@@ -502,9 +502,9 @@ static int translate_to_gid(char *local_gid, uid_t *gid)
 	struct group *gr = NULL;
 	struct group grbuf;
 	char *buf = NULL;
-	size_t buflen = sysconf(_SC_GETGR_R_SIZE_MAX);	
+	size_t buflen = sysconf(_SC_GETGR_R_SIZE_MAX);
 	int ret = -1;
-	
+
 	do {
 		buf = malloc(buflen);
 		if (buf == NULL)
@@ -532,7 +532,7 @@ out:
 }
 
 static int gums_gss_princ_to_ids(char *secname, char *princ,
-				uid_t *uid, uid_t *gid, 
+				uid_t *uid, uid_t *gid,
 				extra_mapping_params **ex)
 {
 	int ret = -1, size, i;
@@ -570,11 +570,11 @@ static int gums_gss_princ_to_ids(char *secname, char *princ,
 	/* retrieve VOMS attributes */
 	if (retrieve_attributes(cert, cas, &attrs) != 0)
 		goto out;
-	if (attrs == NULL) 
+	if (attrs == NULL)
 		X509_NAME_oneline(X509_get_subject_name(cert), dn, sizeof(dn));
 
 	/* initialize SAML library */
-	if (initPrimaSAMLSupport(conf.saml_schema_dir, 
+	if (initPrimaSAMLSupport(conf.saml_schema_dir,
 			conf.saml_log_level) != 0) {
 		IDMAP_LOG(0, ("initPrimaSAMLSupport failed\n"));
 		goto out;
@@ -585,11 +585,11 @@ static int gums_gss_princ_to_ids(char *secname, char *princ,
 		goto out;
 
 	/* contact GUMS server */
-	saml_resp = queryIdentityMappingService(conf.gums_server_location, 
-			saml_req, conf.server_cert, conf.server_key, 
+	saml_resp = queryIdentityMappingService(conf.gums_server_location,
+			saml_req, conf.server_cert, conf.server_key,
 			conf.ca_dir);
 	if (saml_resp != NULL) {
-		saml_result = processResponse(saml_resp, saml_req, &local_uid, 
+		saml_result = processResponse(saml_resp, saml_req, &local_uid,
 						&local_gid);
 		IDMAP_LOG(1, ("processResponse returned %d\n", saml_result));
 		if (saml_result || local_uid == NULL) {
@@ -598,7 +598,7 @@ static int gums_gss_princ_to_ids(char *secname, char *princ,
 			ret = -ENOENT;
 			goto out;
 		}
-		IDMAP_LOG(1, ("GUMS returned uid=%s gid=%s\n", local_uid, 
+		IDMAP_LOG(1, ("GUMS returned uid=%s gid=%s\n", local_uid,
 			local_gid));
 	}
 
@@ -614,10 +614,10 @@ out:
 	if (cert)
 		X509_free(cert);
 
-	if (cas) 
+	if (cas)
 		sk_X509_pop_free(cas, X509_free);
 
-	if (attrs) 
+	if (attrs)
 #ifdef VOMS_BUG
 		my_VOMS_Delete(attrs);
 #else
@@ -629,7 +629,7 @@ out:
 
 	if (saml_resp)
 		free(saml_resp);
-	
+
 	cleanupPrimaSAMLSupport();
 
 	return ret;
@@ -646,7 +646,7 @@ struct trans_func gums_trans = {
 	.gss_princ_to_grouplist = NULL,
 };
 
-struct trans_func *libnfsidmap_plugin_init() 
+struct trans_func *libnfsidmap_plugin_init()
 {
 	return (&gums_trans);
 }
@@ -660,19 +660,19 @@ static STACK_OF(X509) *load_chain(char *certfile)
   X509_INFO *xi;
   int first = 1;
 
-  if(!(stack = sk_X509_new_null())) {
+  if (!(stack = sk_X509_new_null())) {
     printf("memory allocation failure\n");
     goto end;
   }
 
-  if(!(in=BIO_new_file(certfile, "r"))) {
+  if (!(in=BIO_new_file(certfile, "r"))) {
     printf("error opening the file, %s\n",certfile);
     goto end;
   }
 
   /* This loads from a file, a stack of x509/crl/pkey sets */
-  if(!(sk=(STACK_OF(X509_INFO) *)PEM_X509_INFO_read_bio(in,NULL,NULL,NULL))) {
-    /*     if(!(sk=PEM_X509_read_bio(in,NULL,NULL,NULL))) { */
+  if (!(sk=(STACK_OF(X509_INFO) *)PEM_X509_INFO_read_bio(in,NULL,NULL,NULL))) {
+    /*     if (!(sk=PEM_X509_read_bio(in,NULL,NULL,NULL))) { */
     printf("error reading the file, %s\n",certfile);
     goto end;
   }
@@ -693,7 +693,7 @@ static STACK_OF(X509) *load_chain(char *certfile)
     }
     X509_INFO_free(xi);
   }
-  if(!sk_X509_num(stack)) {
+  if (!sk_X509_num(stack)) {
     printf("no certificates in file, %s\n",certfile);
     sk_X509_free(stack);
     goto end;
@@ -705,7 +705,7 @@ end:
   return(ret);
 }
 
-void create_params(X509 *cert, STACK_OF(X509) *cas, 
+void create_params(X509 *cert, STACK_OF(X509) *cas,
 		   extra_mapping_params ***ret_params)
 {
 	int len = 0, i, size = 0;
@@ -728,7 +728,7 @@ void create_params(X509 *cert, STACK_OF(X509) *cas,
 	params[0]->content_len = len;
 
 	/* add other certificates to the array */
-	for(i = 0; i < size; i++) {
+	for (i = 0; i < size; i++) {
 		x = sk_X509_value(cas, i);
 		params[i+1] = malloc(sizeof(extra_mapping_params));
 		len = i2d_X509(x, NULL);
@@ -741,7 +741,7 @@ void create_params(X509 *cert, STACK_OF(X509) *cas,
 	*ret_params = params;
 }
 
-int main(void) 
+int main(void)
 {
 	int uid, gid, ret, i;
 	extra_mapping_params **params = NULL;
@@ -762,8 +762,8 @@ int main(void)
 	cert = (X509 *) PEM_read_bio_X509(tmp, NULL, NULL, NULL);
 	cas = load_chain(proxy_file);
 	create_params(cert, cas, &params);
-	ret = gums_gss_princ_to_ids("spkm3", NULL, &uid, &gid, params); 
-	fprintf(stderr, "gums_gss_princ_to_ids returns %d uid=%d gid=%d\n", 
+	ret = gums_gss_princ_to_ids("spkm3", NULL, &uid, &gid, params);
+	fprintf(stderr, "gums_gss_princ_to_ids returns %d uid=%d gid=%d\n",
 		ret, uid, gid);
 
 	if (tmp)
@@ -776,7 +776,7 @@ int main(void)
 	free_plugin_config_params();
 
 	if (params) {
-		for(i=0; params[i] != NULL; i++) {
+		for (i=0; params[i] != NULL; i++) {
 			free(params[i]->content);
 			free(params[i]);
 		}

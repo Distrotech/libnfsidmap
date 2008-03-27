@@ -119,7 +119,7 @@ static struct umich_ldap_info ldap_info = {
 	.use_ssl = 0,
 	.ca_cert = NULL,
 	.memberof_for_groups = 0,
-	.ldap_timeout = DEFAULT_UMICH_SEARCH_TIMEOUT, 
+	.ldap_timeout = DEFAULT_UMICH_SEARCH_TIMEOUT,
 };
 
 static struct ldap_map_names ldap_map = {
@@ -236,11 +236,11 @@ retry_bind:
 			char *errmsg;
 			if (lerr == LDAP_PROTOCOL_ERROR) {
 				ldap_get_option(ld, LDAP_OPT_PROTOCOL_VERSION,
-						&current_version); 
+						&current_version);
 				new_version = current_version == LDAP_VERSION2 ?
 					LDAP_VERSION3 : LDAP_VERSION2;
 				ldap_set_option( ld, LDAP_OPT_PROTOCOL_VERSION,
-						&new_version); 
+						&new_version);
 				IDMAP_LOG(2, ("ldap_init_and_bind: "
 					  "got protocol error while attempting "
 					  "bind with protocol version %d, "
@@ -310,7 +310,7 @@ umich_name_to_ids(char *name, int idtype, uid_t *uid, gid_t *gid,
 	int sizelimit = 1;
 
 	err = -EINVAL;
-	if (uid == NULL || gid == NULL || name == NULL || 
+	if (uid == NULL || gid == NULL || name == NULL ||
 	    attrtype == NULL || linfo == NULL || linfo->server == NULL ||
 	    linfo->people_tree == NULL || linfo->group_tree == NULL)
 		goto out;
@@ -354,7 +354,7 @@ umich_name_to_ids(char *name, int idtype, uid_t *uid, gid_t *gid,
 	attrs[0] = ldap_map.NFSv4_uid_attr;
 	attrs[1] = ldap_map.NFSv4_gid_attr;
 	attrs[2] = NULL;
-	
+
 	err = ldap_search_st(ld, base, LDAP_SCOPE_SUBTREE,
 			 filter, (char **)attrs,
 			 0, &timeout, &result);
@@ -473,7 +473,7 @@ umich_id_to_name(uid_t id, int idtype, char **name, size_t len,
 	int sizelimit = 1;
 
 	err = -EINVAL;
-	if (name == NULL || linfo == NULL || linfo->server == NULL || 
+	if (name == NULL || linfo == NULL || linfo->server == NULL ||
 		linfo->people_tree == NULL || linfo->group_tree == NULL)
 		goto out;
 
@@ -494,7 +494,7 @@ umich_id_to_name(uid_t id, int idtype, char **name, size_t len,
 	} else if (idtype == IDTYPE_GROUP) {
 		if ((f_len = snprintf(filter, LDAP_FILT_MAXSIZ,
 				      "(&(objectClass=%s)(%s=%s))",
-				      ldap_map.NFSv4_group_objcls, 
+				      ldap_map.NFSv4_group_objcls,
 				      ldap_map.NFSv4_gid_attr,idstr))
 				== LDAP_FILT_MAXSIZ) {
 			IDMAP_LOG(0, ("ERROR: umich_id_to_name: "
@@ -690,7 +690,7 @@ umich_gss_princ_to_grouplist(char *principal, gid_t *groups, int *ngroups,
                           "filter too long!\n"));
                 ldap_value_free(names);
                 goto out_unbind;
-            } 
+            }
 
             ldap_value_free(names);
 
@@ -768,7 +768,7 @@ umich_gss_princ_to_grouplist(char *principal, gid_t *groups, int *ngroups,
 		if (cnptr) *cnptr = '\0';
 
 		err = -ENOENT;
-		if (ldap_map.NFSv4_grouplist_filter) 
+		if (ldap_map.NFSv4_grouplist_filter)
         	    f_len = snprintf(filter, LDAP_FILT_MAXSIZ,
                         "(&(objectClass=%s)(%s)%s)",
                         ldap_map.NFSv4_group_objcls,
@@ -798,7 +798,7 @@ umich_gss_princ_to_grouplist(char *principal, gid_t *groups, int *ngroups,
                           "for tree '%s, filter '%s': %s (%d)\n",
                           linfo->group_tree, filter,
                           ldap_err2string(err), err));
-                	if ((ldap_get_option(ld, LDAP_OPT_ERROR_STRING, &errmsg)==LDAP_SUCCESS) 
+                	if ((ldap_get_option(ld, LDAP_OPT_ERROR_STRING, &errmsg)==LDAP_SUCCESS)
 						&&
                                 (errmsg != NULL) && (*errmsg != '\0')) {
                         	IDMAP_LOG(2, ("umich_gss_princ_to_grouplist: "
@@ -809,7 +809,7 @@ umich_gss_princ_to_grouplist(char *principal, gid_t *groups, int *ngroups,
         	}
 
 		count = ldap_count_entries(ld, result);
-		if (count == 0) 
+		if (count == 0)
 			continue;
 		if (count != 1 ){
 			IDMAP_LOG(2, ("umich_gss_princ_to_grouplist:"
@@ -1131,7 +1131,7 @@ umichldap_init(void)
 			  "%s\n", missing_msg));
 		goto fail;
 	}
-  
+
 	ldap_info.server = server_in;
 	canonicalize = conf_get_str_with_def(LDAP_SECTION, "LDAP_canonicalize_name", "yes");
 	if ((strcasecmp(canonicalize, "true") == 0) ||
@@ -1150,27 +1150,27 @@ umichldap_init(void)
 	ldap_map.NFSv4_person_objcls =
 		conf_get_str_with_def(LDAP_SECTION, "NFSv4_person_objectclass",
 				      DEFAULT_UMICH_OBJCLASS_REMOTE_PERSON);
-	
+
 	ldap_map.NFSv4_group_objcls =
 		conf_get_str_with_def(LDAP_SECTION, "NFSv4_group_objectclass",
 				      DEFAULT_UMICH_OBJCLASS_REMOTE_GROUP);
-	
+
 	ldap_map.NFSv4_nfsname_attr =
 		conf_get_str_with_def(LDAP_SECTION, "NFSv4_name_attr",
 				      DEFAULT_UMICH_ATTR_NFSNAME);
-	
+
 	ldap_map.NFSv4_uid_attr =
 		conf_get_str_with_def(LDAP_SECTION, "NFSv4_uid_attr",
 				      DEFAULT_UMICH_ATTR_UIDNUMBER);
-	
+
 	ldap_map.NFSv4_acctname_attr =
 		conf_get_str_with_def(LDAP_SECTION, "NFSv4_acctname_attr",
 				      DEFAULT_UMICH_ATTR_ACCTNAME);
-	
+
 	ldap_map.NFSv4_group_nfsname_attr =
 		conf_get_str_with_def(LDAP_SECTION, "NFSv4_group_attr",
 				      DEFAULT_UMICH_ATTR_GROUP_NFSNAME);
-	
+
 	ldap_map.NFSv4_gid_attr =
 		conf_get_str_with_def(LDAP_SECTION, "NFSv4_gid_attr",
 				      DEFAULT_UMICH_ATTR_GIDNUMBER);
@@ -1182,8 +1182,8 @@ umichldap_init(void)
 	ldap_map.GSS_principal_attr =
 		conf_get_str_with_def(LDAP_SECTION, "GSS_principal_attr",
 				      DEFAULT_UMICH_ATTR_GSSAUTHNAME);
-	
-	ldap_map.NFSv4_grouplist_filter = 
+
+	ldap_map.NFSv4_grouplist_filter =
 		conf_get_str_with_def(LDAP_SECTION, "NFSv4_grouplist_filter",
 				      NULL);
 
@@ -1194,7 +1194,7 @@ umichldap_init(void)
 	ldap_info.ldap_timeout =
 		conf_get_num(LDAP_SECTION, "LDAP_timeout_seconds",
                                       DEFAULT_UMICH_SEARCH_TIMEOUT);
-		
+
 
  	/*
 	 * Some LDAP servers do a better job with indexing where searching
@@ -1299,7 +1299,7 @@ struct trans_func umichldap_trans = {
 	.gss_princ_to_grouplist = umichldap_gss_princ_to_grouplist,
 };
 
-struct trans_func *libnfsidmap_plugin_init() 
+struct trans_func *libnfsidmap_plugin_init()
 {
 	return (&umichldap_trans);
 }

@@ -125,7 +125,7 @@ static int nss_gid_to_name(gid_t gid, char *domain, char *name, size_t len)
 			free(buf);
 		}
 	} while (err == -ERANGE);
-			
+
 	if (err)
 		goto out_buf;
 	err = write_name(name, gr->gr_name, domain, len);
@@ -185,7 +185,7 @@ static struct passwd *nss_getpwnam(const char *name, const char *domain, int *er
 	IDMAP_LOG(4, ("nss_getpwnam: name '%s' domain '%s': "
 		  "resulting localname '%s'\n", name, domain, localname));
 	if (localname == NULL) {
-		IDMAP_LOG(0, ("nss_getpwnam: name '%s' does not map " 
+		IDMAP_LOG(0, ("nss_getpwnam: name '%s' does not map "
 			"into domain '%s'\n", name,
 			domain ? domain : "<not-provided>"));
 		goto err_free_buf;
@@ -267,7 +267,7 @@ out:
 }
 
 static int nss_gss_princ_to_ids(char *secname, char *princ,
-				uid_t *uid, uid_t *gid, 
+				uid_t *uid, uid_t *gid,
 				extra_mapping_params **ex)
 {
 	struct passwd *pw;
@@ -276,7 +276,7 @@ static int nss_gss_princ_to_ids(char *secname, char *princ,
 	struct conf_list *realms;
 	struct conf_list_node *r;
 
-	if (!strcmp(secname, "spkm3"))
+	if (strcmp(secname, "spkm3") == 0)
 		return -ENOENT;
 
 	if (strcmp(secname, "krb5") != 0)
@@ -292,23 +292,23 @@ static int nss_gss_princ_to_ids(char *secname, char *princ,
 	realms = get_local_realms();
 	if (realms) {
 		int found = 0;
-		for(r = TAILQ_FIRST(&realms->fields); r; 
-		    r = TAILQ_NEXT(r, link)) {
-			if (strlen(r->field) == strlen(princ_realm) && 
+		for (r = TAILQ_FIRST(&realms->fields); r;
+		     r = TAILQ_NEXT(r, link)) {
+			if (strlen(r->field) == strlen(princ_realm) &&
 				!strcmp(r->field, princ_realm)) {
 				found = 1;
 				break;
 			}
 		}
-		if (!found) 
+		if (!found)
 			return -EINVAL;
 	} else {
 		char *domain;
 		domain = get_default_domain();
 		domain = toupper_str(domain);
 		if (strlen(princ_realm) != strlen(domain) ||
-			strcmp(princ_realm, domain)) 
-			return -EINVAL; 
+			strcmp(princ_realm, domain))
+			return -EINVAL;
 	}
 	/* XXX: this should call something like getgssauthnam instead? */
 	pw = nss_getpwnam(princ, NULL, &err);
@@ -324,7 +324,7 @@ out:
 }
 
 int nss_gss_princ_to_grouplist(char *secname, char *princ,
-			       gid_t *groups, int *ngroups, 
+			       gid_t *groups, int *ngroups,
 			       extra_mapping_params **ex)
 {
 	struct passwd *pw;
@@ -358,7 +358,7 @@ struct trans_func nss_trans = {
 	.gss_princ_to_grouplist = nss_gss_princ_to_grouplist,
 };
 
-struct trans_func *libnfsidmap_plugin_init() 
+struct trans_func *libnfsidmap_plugin_init()
 {
 	return (&nss_trans);
 }
