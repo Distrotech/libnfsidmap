@@ -160,13 +160,13 @@ static int load_plugins(struct conf_list *methods,
 	struct mapping_plugin **plgns;
 	struct conf_list_node *m;
 
-	plgns = malloc((methods->cnt + 1) * sizeof(struct mapping_plugin *));
+	plgns = calloc(methods->cnt + 1, sizeof(struct mapping_plugin *));
 	if (plgns == NULL)
 		return -1;
 	plgns[methods->cnt] = NULL;
 	for(m = TAILQ_FIRST(&methods->fields), i = 0; m; 
 	    m = TAILQ_NEXT(m, link), i++) {
-		plgns[i] = malloc(sizeof(struct mapping_plugin));
+		plgns[i] = calloc(1, sizeof(struct mapping_plugin));
 		if (plgns[i] == NULL) 
 			goto out;
 		if (load_translation_plugin(m->field, plgns[i]) == -1) {
@@ -179,14 +179,8 @@ static int load_plugins(struct conf_list *methods,
 	ret = 0;
 	*plugins = plgns;
 out:
-	if (ret) {
-		int k;
-		for(k = 0; k < i; k++) {
-			dlclose(plgns[i]->dl_handle);
-			free(plgns[i]);
-		}
-		free(plgns);
-	}
+	if (ret)
+		unload_plugins(plgns);
 	return ret;
 }
 int nfs4_cleanup_name_mapping() 
