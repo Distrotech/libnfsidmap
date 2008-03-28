@@ -194,7 +194,7 @@ int nfs4_cleanup_name_mapping()
 
 int nfs4_init_name_mapping(char *conffile)
 {
-	int ret = -1;
+	int ret = -ENOENT;
 	char *method;
 	int dflt = 0;
 	struct conf_list *nfs4_methods, *gss_methods;
@@ -215,7 +215,7 @@ int nfs4_init_name_mapping(char *conffile)
 			IDMAP_LOG(0, ("libnfsidmap: Unable to determine "
 				  "a default nfsv4 domain; consider "
 				  "specifying one in idmapd.conf\n"));
-			return ret;
+			return -ENOENT;
 		}
 	}
 	IDMAP_LOG(1, ("libnfsidmap: using%s domain: %s\n",
@@ -226,7 +226,7 @@ int nfs4_init_name_mapping(char *conffile)
 	nfs4_methods = conf_get_list("Translation", "Method");
 	if (nfs4_methods) {
 		if (load_plugins(nfs4_methods, &nfs4_plugins) == -1)
-			return -1;
+			return -ENOENT;
 	} else {
 		struct conf_list list;
 		struct conf_list_node node;
@@ -237,7 +237,7 @@ int nfs4_init_name_mapping(char *conffile)
 		TAILQ_INSERT_TAIL (&list.fields, &node, link);
 
 		if (load_plugins(&list, &nfs4_plugins) == -1)
-			return -1;
+			return -ENOENT;
 	}
 
 	gss_methods = conf_get_list("Translation", "GSS-Methods");
@@ -255,8 +255,7 @@ out:
 		nfs4_plugins = gss_plugins = NULL;
 	}
 
-	return ret;
-
+	return ret ? -ENOENT: 0;
 }
 
 char * get_default_domain(void)
