@@ -45,9 +45,11 @@
  */
 
 #include <stdio.h>
+#include <string.h>
 #include <sys/types.h>
 #include <nfsidmap.h>
 
+#define QUIT_ON_ERROR 1
 #define PATH_IDMAPDCONF "/etc/idmapd.conf"
 char *conf_path = PATH_IDMAPDCONF;
 
@@ -80,7 +82,7 @@ main(int ac, char **av)
 	else
 		printf("nfs4_gss_princ_to_ids: princ %s has uid %d gid %d\n",
 			princ, uid, gid);
-#if 1
+#if QUIT_ON_ERROR
 	if (err) {
 		printf("calling it quits!\n");
 		return err;
@@ -94,7 +96,7 @@ main(int ac, char **av)
 		printf("nfs4_name_to_uid: name %s has uid %d\n",
 			name, uid);
 
-#if 1
+#if QUIT_ON_ERROR
 	if (err) {
 		printf("calling it quits!\n");
 		return err;
@@ -118,7 +120,7 @@ main(int ac, char **av)
 		printf("\n");
 	}
 
-#if 1
+#if QUIT_ON_ERROR
 	if (err) {
 		printf("calling it quits!\n");
 		return err;
@@ -133,7 +135,7 @@ main(int ac, char **av)
 		printf("nfs4_uid_to_name: uid %d has name %s\n",
 			uid, name_buf);
 
-#if 1
+#if QUIT_ON_ERROR
 	if (err) {
 		printf("calling it quits!\n");
 		return err;
@@ -148,7 +150,7 @@ main(int ac, char **av)
 		printf("nfs4_gid_to_name: gid %d has name %s\n",
 			gid, name_buf);
 
-#if 1
+#if QUIT_ON_ERROR
 	if (err) {
 		printf("calling it quits!\n");
 		return err;
