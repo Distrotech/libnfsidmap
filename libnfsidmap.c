@@ -145,7 +145,7 @@ static void unload_plugins(struct mapping_plugin **plgns)
 	int i;
 	for (i = 0; plgns[i] != NULL; i++) {
 		if (plgns[i]->dl_handle && dlclose(plgns[i]->dl_handle))
-			IDMAP_LOG(0, ("WARNING: libnfsidmap: failed to "
+			IDMAP_LOG(1, ("libnfsidmap: failed to "
 				  "unload plugin for method = %s\n",
 				  plgns[i]->trans->name));
 		free(plgns[i]);
