@@ -39,7 +39,7 @@
 #define NFS4_MAX_DOMAIN_LEN 512
 typedef enum {
 	X509_CERT = 1
-} exra_types;
+} extra_mapping_types;
 	
 typedef struct _extra_mapping_params {
 	void *content;
