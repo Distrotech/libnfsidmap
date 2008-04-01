@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ(2.59)
-AC_INIT(libnfsidmap, 0.20, nfsv4-wg@citi.umich.edu)
+AC_INIT(libnfsidmap, 0.21b1, nfsv4-wg@citi.umich.edu)
 AC_CONFIG_SRCDIR([nfsidmap.h])
 AM_INIT_AUTOMAKE
 AM_PROG_LIBTOOL
@@ -27,6 +27,15 @@ if test "x$enable_ldap" != "xno" ; then
 	fi
 fi
 AM_CONDITIONAL(ENABLE_LDAP, test "x$have_ldap" = "xyes")
+
+# Should we build gums mapping library?
+AC_ARG_ENABLE([gums],
+	[AC_HELP_STRING([--enable-gums],[Enable support for the GUMS mapping library @<:@default=false@:>@])])
+if test "x$enable_gums" = "xyes" ; then
+	AC_DEFINE([ENABLE_GUMS], 1, [Enable GUMS mapping library support])
+fi
+AM_CONDITIONAL(ENABLE_GUMS, test "x$enable_gums" = "xyes")
+
 
 # Checks for header files.
 AC_HEADER_STDC
