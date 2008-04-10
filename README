@@ -3,32 +3,26 @@ Library to help mapping id's, mainly for NFSv4.
 When NFSv4 is using AUTH_GSS (which currently only supports Kerberos v5), the
 NFSv4 server mapping functions MUST use secure communications.
 
-We provide two sets of mapping functions, configured using /etc/idmapd.conf
+We provide several mapping functions, configured using /etc/idmapd.conf
 
-Excerpt from /etc/idmapd.conf:
----------------------
-#
-# One of
-#   nsswitch (getpwXXX routines, all names must be in default domain)
-#   umich_ldap (ldap schema, also capable of handling multiple domains)
-[Translation]
+As of the 0.21 version of this library, mapping methods are separate
+dynamically-loaded libaries.  This allows the separation of any
+LDAP requirements from the main libnfsidmap library.  The main library
+now basically loads and calls the functions in the method-specific
+libaries.  The method libraries are expected to be named
+"libnfsidmap_<method>.so", for example, "libnfsidmap_nsswitch.so".
 
-Method = umich_ldap
+Several methods may be specified in the /etc/idmapd.conf configuration
+file.  Each method is called until a mapping is found.
 
-[UMICH_SCHEMA]
-
-LDAP_server = 141.211.133.100
-LDAP_base = dc=arbitrary,dc=domain,dc=org
-NFSv4_name_attr = NFSv4Name
-NFSv4_group_attr = NFSv4Name
-GSS_principal_attr = GSSAuthName
+The following translation methods are delivered in the default distribution:
 
 nsswitch
-------
+--------
 
-The default set is called nsswitch. The nsswitch functions use the get password
+The default method is called nsswitch. This method uses the get password
 file entry functions getpwname(), getpwid(), and the get group file entry
-functions getgrnam(), getgrgid(). The nsswitch functions can therefore be
+functions getgrnam(), getgrgid(). The nsswitch method can therefore be
 configured by the /etc/nss_switch.conf passwd data base stanza. If secure
 communications are required (AUTH_GSS), the passwd data base stanza can contain
 the 'file' entry because the rpc.idmapd and rpc.svcgssd run as root, and/or the
@@ -37,13 +31,27 @@ The 'nis' entry is NOT recommended, it does not have a secure communications
 mode.
 
 
+static
+------
+
+This method works only for translating GSS authenticated names to local
+names.  It uses a static mapping setup defined in the [Static] section
+of the idmapd.conf file.  The form of the entries are:
+  <GSS-Authenticated name> = <localuser>
+
+For example:
+  nfs/host.domain.org@DOMAIN.ORG = root
+
+It is recommended that this module be used in combination with another
+module (e.g. the nsswitch module).
+
 umich_ldap
-------------
-The second set of mapping functions is a new experimental set called umich_ldap
-in the idmapd.conf example above.  This set of translation functions are
-designed to service remote users, allowing remote users to set and get ACLs as
-well as map GSS principals to id's. The functions are LDAP based, and the ldap
-search filters look for attribute names set by idmapd.conf [UMICH_SCHEMA]
+----------
+An experimental method, umich_ldap uses an LDAP schema and ldap functions
+to perform translations.  This method is designed to service remote users,
+allowing remote users to set and get ACLs as well as map GSS principals
+to id's.  The functions are LDAP based, and the ldap search filters look
+for attribute names set by idmapd.conf [UMICH_SCHEMA]
 NFSv4_name_attr, NFSv4_group_attr, and GSS_principal_attr.
 
 It is assumed that the LDAP server will index these attributes, and that these
