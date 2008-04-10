@@ -309,7 +309,7 @@ nfs4_get_default_domain(char *server, char *domain, size_t len)
 		if (ret)						\
 			return ret;					\
 									\
-		if (prefer_gss && gss_plugins)				\
+		if ((prefer_gss) && gss_plugins)			\
 			plgns = gss_plugins;				\
 		else							\
 			plgns = nfs4_plugins;				\
