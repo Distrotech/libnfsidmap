@@ -11,8 +11,21 @@ GUMS_MAPPING_LIB =
 endif
 lib_LTLIBRARIES = libnfsidmap.la libnfsidmap_nsswitch.la libnfsidmap_static.la \
 		  $(UMICH_LDAP_LIB) $(GUMS_MAPPING_LIB)
+
+# Library versioning notes from:
+#  http://sources.redhat.com/autobook/autobook/autobook_91.html
+#
+# -version-info <current>:<revision>:<age>
+#  <current>	The number of the current interface exported by library.
+#  <revision>	The implementation number of the most recent interface
+#		exported by the library.  (i.e. revision should be updated
+#		with each new release of the library, and reset to zero
+#		when <current> is updated.)
+#  <age> 	The number of previous additional interfaces supported
+#  		by this library.
+
 libnfsidmap_la_SOURCES = libnfsidmap.c cfg.c strlcpy.c cfg.h nfsidmap_internal.h queue.h
-libnfsidmap_la_LDFLAGS = -version-info 3:0:2 -ldl
+libnfsidmap_la_LDFLAGS = -version-info 3:0:3 -ldl
 
 libnfsidmap_nsswitch_la_SOURCES = nss.c
 libnfsidmap_nsswitch_la_LDFLAGS = -version-info 0:0:0

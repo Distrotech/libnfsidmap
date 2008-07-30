@@ -92,3 +92,26 @@ one to support I would ask you to consider this one.
 The allows you to change the tv_sec timeout used for the
 ldapsearch_st calls.
 
+2008-07-30:
+
+Changes since libnfsidmap-0.20:
+
+The main library has been changed to load "plugin" libraries to
+perform the mappings.  This decouples the main library from any ldap
+(and sasl, etc.) dependencies.
+
+Several translation methods (plugins) may now be specified in the
+idmapd.conf file.  While a plugin returns -ENOENT, the next is called
+until a mapping is found, or there are no more plugins to try.
+
+A "static" mapping plugin from David Härdeman <david@hardeman.nu> has
+been added.
+
+A "gums" mapping plugin from Olga Kornievskaia <aglo@citi.umich.edu>
+has been added.  Olga also did most of the work to convert the code to
+use this new plugin architecture.
+
+The interface is changed to add two new functions,
+nfs4_gss_princ_to_ids_ex(), and nfs4_gss_princ_to_grouplist_ex() which
+allow extra information to be passed to these mapping functions.
+

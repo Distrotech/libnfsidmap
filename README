@@ -69,7 +69,10 @@ mapping between the NFSv4_group_attr name and a GID.
 
 GSS_principal_attr holds a GSS security mechanism specific context principal
 name. For Kerberos v5, it is a Kerberos principal <service/>principal@REALM.
-For SPKM3, it is a PKI DN such as "/C=US/ST=Michigan/O=University of Michigan/OU=UMICH Kerberos Certification Authority/CN=andros/USERID=andros/Email=andros@UMICH.EDU".  There is a many-to-one relationship between the GSS_principal_attr
+For SPKM3, it is a PKI DN such as (line is split):`
+"/C=US/ST=Michigan/O=University of Michigan/OU=UMICH Kerberos
+ Certification Authority/CN=andros/USERID=andros/Email=andros@UMICH.EDU".
+There is a many-to-one relationship between the GSS_principal_attr
 name and a UID plus GID.
 
 We have defined LDAP object classes for our experimental NFSv4 id mapping.
