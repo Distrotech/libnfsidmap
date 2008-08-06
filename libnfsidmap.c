@@ -67,6 +67,10 @@ static struct mapping_plugin **gss_plugins = NULL;
 #define PATH_IDMAPDCONF "/etc/idmapd.conf"
 #endif
 
+#ifndef IDMAPD_DEFAULT_DOMAIN
+#define IDMAPD_DEFAULT_DOMAIN "localdomain"
+#endif
+
 /* Default logging fuction */
 static void default_logger(const char *fmt, ...)
 {
@@ -212,10 +216,12 @@ int nfs4_init_name_mapping(char *conffile)
 		dflt = 1;
 		ret = domain_from_dns(&default_domain);
 		if (ret) {
-			IDMAP_LOG(0, ("libnfsidmap: Unable to determine "
-				  "a default nfsv4 domain; consider "
-				  "specifying one in idmapd.conf\n"));
-			return -ENOENT;
+			IDMAP_LOG(1, ("libnfsidmap: Unable to determine "
+				  "the NFSv4 domain; Using '%s' as the NFSv4 domain "
+				  "which means UIDs will be mapped to the 'Nobody-User' "
+				  "user defined in %s\n", 
+				  IDMAPD_DEFAULT_DOMAIN, PATH_IDMAPDCONF));
+			default_domain = IDMAPD_DEFAULT_DOMAIN;
 		}
 	}
 	IDMAP_LOG(1, ("libnfsidmap: using%s domain: %s\n",
