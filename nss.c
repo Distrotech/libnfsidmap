@@ -68,14 +68,6 @@ static int write_name(char *dest, char *localname, char *domain, size_t len)
 	return 0;
 }
 
-static char * toupper_str(char *s)
-{
-	int i;
-	for (i=0; i < strlen(s); i++)
-		s[i] = toupper(s[i]);
-	return s;
-}
-
 static int nss_uid_to_name(uid_t uid, char *domain, char *name, size_t len)
 {
 	struct passwd *pw = NULL;
@@ -275,6 +267,7 @@ static int nss_gss_princ_to_ids(char *secname, char *princ,
 	char *princ_realm;
 	struct conf_list *realms;
 	struct conf_list_node *r;
+	int found = 0;
 
 	if (strcmp(secname, "spkm3") == 0)
 		return -ENOENT;
@@ -288,28 +281,18 @@ static int nss_gss_princ_to_ids(char *secname, char *princ,
 		return -EINVAL;
 	princ_realm++;
 
-	/* get accepted realms */
+	/* get list of "local-equivalent" realms and
+	 * check against the principal's realm */
 	realms = get_local_realms();
-	if (realms) {
-		int found = 0;
-		for (r = TAILQ_FIRST(&realms->fields); r;
-		     r = TAILQ_NEXT(r, link)) {
-			if (strlen(r->field) == strlen(princ_realm) &&
-				!strcmp(r->field, princ_realm)) {
-				found = 1;
-				break;
-			}
+	TAILQ_FOREACH(r, &realms->fields, link) {
+		if (strcmp(r->field, princ_realm) == 0) {
+			found = 1;
+			break;
 		}
-		if (!found)
-			return -EINVAL;
-	} else {
-		char *domain;
-		domain = get_default_domain();
-		domain = toupper_str(domain);
-		if (strlen(princ_realm) != strlen(domain) ||
-			strcmp(princ_realm, domain))
-			return -EINVAL;
 	}
+	if (!found)
+		return -ENOENT;
+
 	/* XXX: this should call something like getgssauthnam instead? */
 	pw = nss_getpwnam(princ, NULL, &err);
 	if (pw == NULL) {

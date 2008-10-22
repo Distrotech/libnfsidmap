@@ -82,6 +82,14 @@ static void default_logger(const char *fmt, ...)
 }
 nfs4_idmap_log_function_t idmap_log_func = default_logger;
 
+static char * toupper_str(char *s)
+{
+	int i;
+	for (i=0; i < strlen(s); i++)
+		s[i] = toupper(s[i]);
+	return s;
+}
+
 static int domain_from_dns(char **domain)
 {
 	struct hostent *he;
@@ -227,7 +235,30 @@ int nfs4_init_name_mapping(char *conffile)
 	IDMAP_LOG(1, ("libnfsidmap: using%s domain: %s\n",
 		(dflt ? " (default)" : ""), default_domain));
 
+	/* Get list of "local equivalent" realms.  Meaning the list of realms
+	 * where john@REALM.A is considered the same user as john@REALM.B
+	 * If not specified, default to upper-case of local domain name */
 	local_realms = conf_get_list("General", "Local-Realms");
+	if (local_realms == NULL) {
+		struct conf_list_node *node;
+
+		local_realms = malloc(sizeof *local_realms);
+		if (local_realms == NULL)
+			return -ENOMEM;
+		local_realms->cnt = 0;
+		TAILQ_INIT(&local_realms->fields);
+
+		node = calloc(1, sizeof *node);
+		if (node == NULL)
+			return -ENOMEM;
+		node->field = strdup(get_default_domain());
+		if (node->field == NULL)
+			return -ENOMEM;
+		toupper_str(node->field);
+
+		TAILQ_INSERT_TAIL(&local_realms->fields, node, link);
+		local_realms->cnt++;
+	}
 
 	nfs4_methods = conf_get_list("Translation", "Method");
 	if (nfs4_methods) {
