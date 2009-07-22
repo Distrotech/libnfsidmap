@@ -1,4 +1,3 @@
-man_MANS = nfs4_uid_to_name.3
 if ENABLE_LDAP
 UMICH_LDAP_LIB = libnfsidmap_umich_ldap.la
 else
@@ -39,8 +38,14 @@ libnfsidmap_umich_ldap_la_LDFLAGS = -version-info 0:0:0 -lldap
 libnfsidmap_gums_la_SOURCES = gums.c
 libnfsidmap_gums_la_LDFLAGS = -version-info 0:0:0
 
+man3_MANS = nfs4_uid_to_name.3
+man5_MANS	= idmapd.conf.5
 include_HEADERS = nfsidmap.h
-EXTRA_DIST = $(man_MANS) libtest.c idmapd.conf
+
+EXTRA_DIST = $(man3_MANS) \
+	     $(man5_MANS) \
+	     libtest.c \
+	     idmapd.conf
 
 #	XXX: also exclude debian/files and debian/files.new ? do a clean??
 dist-hook:
