@@ -1,6 +1,6 @@
 .TH nfs4_uid_to_name 3  2004-08-05
 .SH NAME
-nfs4_uid_to_name, nfs4_gid_to_name, nfs4_name_to_uid, nfs4_name_to_gid, nfs4_init_name_mapping, nfs4_get_default_domain, nfs4_gss_princ_to_ids: idmapping for nfsv4
+nfs4_uid_to_name, nfs4_gid_to_name, nfs4_name_to_uid, nfs4_name_to_gid, nfs4_init_name_mapping, nfs4_get_default_domain, nfs4_gss_princ_to_ids, nfs4_gss_princ_to_grouplist, nfs4_gss_princ_to_ids_ex, nfs4_gss_princ_to_grouplist_ex, nfs4_set_debug: idmapping for nfsv4
 .SH SYNOPSIS
 .B #include <nfs4_idmap.h>
 .sp
@@ -16,9 +16,16 @@ nfs4_uid_to_name, nfs4_gid_to_name, nfs4_name_to_uid, nfs4_name_to_gid, nfs4_ini
 .sp
 .BI "int nfs4_name_to_gid(char *name, gid_t *gid);"
 .sp
-.BI "int nfs4_gss_princ_to_ids(char *princ, uid_t *uid, gid_t *gid);"
-.fi
-.BI "int nfs4_get_grouplist(const char *name, gid_t *groups, int *ngroups);"
+.BI "int nfs4_gss_princ_to_ids(char *secname, char *princ, uid_t *uid, gid_t *gid);"
+.sp
+.BI "int nfs4_gss_princ_to_grouplist(char *secname, char *princ, gid_t *groups, int *ngroups);"
+.sp
+.BI "int nfs4_gss_princ_to_ids_ex(char *secname, char *princ, uid_t *uid, gid_t *gid, extra_mapping_params **ex);"
+.sp
+.BI "int nfs4_gss_princ_to_grouplist_ex(char *secname, char *princ, gid_t *groups, int *ngroups, extra_mapping_params **ex);"
+.sp
+.BI "void nfs4_set_debug(int dbg_level, void (*logger)(const char *, ...));"
+.sp
 .fi
 .SH DESCRIPTION
 NFSv4 uses names of the form
@@ -93,10 +100,23 @@ to the actual number of such groups.  If the user belongs to more than
 groups, then an error is returned and the actual number of groups is stored in
 *ngroups.
 .PP
-Finally,
-.B nfs4_gss_princ_to_ids()
-is used to convert from a gss principal name (as returned by
+Functions
+.BR nfs4_gss_princ_to_ids() ,
+.BR nfs4_gss_princ_to_grouplist() ,
+.BR nfs4_gss_princ_to_ids_ex() ,
+and
+.B nfs4_gss_princ_to_grouplist_ex()
+are used to convert from a gss principal name (as returned by
 .BR gss_display_name() )
-to a uid and gid.
+to a uid and gid, or list of gids.
+.PP
+Finally,
+.B nfs4_set_debug()
+allows the application to set a debugging level to produce extra
+debugging information from within the library.  The optional
+.I logger
+function specifies an alternative logging function to call for
+the debug messages rather than the default internal function
+within the library.
 .SH RETURN VALUE
 All functions return 0 or, in the case of error, -ERRNO.
