@@ -290,9 +290,11 @@ static int nss_gss_princ_to_ids(char *secname, char *princ,
 			break;
 		}
 	}
-	if (!found)
+	if (!found) {
+		IDMAP_LOG(1, ("nss_gss_princ_to_ids: Local-Realm '%s': NOT FOUND", 
+			princ_realm));
 		return -ENOENT;
-
+	}
 	/* XXX: this should call something like getgssauthnam instead? */
 	pw = nss_getpwnam(princ, NULL, &err);
 	if (pw == NULL) {
