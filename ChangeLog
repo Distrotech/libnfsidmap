@@ -115,3 +115,24 @@ The interface is changed to add two new functions,
 nfs4_gss_princ_to_ids_ex(), and nfs4_gss_princ_to_grouplist_ex() which
 allow extra information to be passed to these mapping functions.
 
+2009-07-29:
+
+Changes since libnfsidmap-0.21:
+
+From Steve Dickson <SteveD@redhat.com>:
+Allows mappings to be correct "right out of the box" when DNS is
+set up correctly and stops idmapper from dying when there is
+no domain name set.
+
+Move the default processing for the "Local-Realm" config option
+into the main config file processing function and adds missing
+documentation for the previously added configuration option.
+
+From Steve Dickson <SteveD@redhat.com>:
+Print a debug log message "when the krb5 realm can not be used since
+it does not match the DNS domain name or the 'Local-Realm' variable
+defined in /etc/idmad.conf"
+
+Move the idmapd.conf manpage from nfs-utils and update it to match
+the current functionality.
+
