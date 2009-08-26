@@ -136,3 +136,10 @@ defined in /etc/idmad.conf"
 Move the idmapd.conf manpage from nfs-utils and update it to match
 the current functionality.
 
+2009-08-26:
+
+Changes since libnfsidmap-0.22 (which was never officially announced):
+
+From Guillaume Rousse <Guillaume.Rousse@inria.fr>:
+Changes to install, and look for, the plugin libraries in a separate
+libnfsidmap directory.
