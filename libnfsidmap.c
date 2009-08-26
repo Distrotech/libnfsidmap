@@ -59,7 +59,9 @@ int idmap_verbosity = 0;
 static struct mapping_plugin **nfs4_plugins = NULL;
 static struct mapping_plugin **gss_plugins = NULL;
 
-#define PLUGIN_PREFIX "libnfsidmap_"
+#ifndef PATH_PLUGINS
+#define PATH_PLUGINS "/usr/lib/libnfsidmap"
+#endif
 #define PLUGIN_INIT_FUNC "libnfsidmap_plugin_init"
 
 
@@ -113,7 +115,7 @@ static int load_translation_plugin(char *method, struct mapping_plugin *plgn)
 	char plgname[128];
 	int ret = 0;
 
-	snprintf(plgname, sizeof(plgname), "%s%s.so", PLUGIN_PREFIX, method);
+	snprintf(plgname, sizeof(plgname), "%s/%s.so", PATH_PLUGINS, method);
 
 	dl = dlopen(plgname, RTLD_NOW | RTLD_LOCAL);
 	if (dl == NULL) {
