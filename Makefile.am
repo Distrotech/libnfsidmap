@@ -1,3 +1,5 @@
+ACLOCAL_AMFLAGS = -I m4
+
 if ENABLE_LDAP
 UMICH_LDAP_LIB = umich_ldap.la
 else
