@@ -143,3 +143,14 @@ Changes since libnfsidmap-0.22 (which was never officially announced):
 From Guillaume Rousse <Guillaume.Rousse@inria.fr>:
 Changes to install, and look for, the plugin libraries in a separate
 libnfsidmap directory.
+
+2010-12-08:
+
+Changes since libnfsidmap-0.23
+
+Added autogen.sh which runs all the autoconfig scripts
+Added a .gitignore file
+
+From Bryan Schumaker <bjschuma@netapp.com>
+Added nfs4_owner interfaces which are used by the
+new nfsidmap program
