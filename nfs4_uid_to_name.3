@@ -1,6 +1,11 @@
 .TH nfs4_uid_to_name 3  2004-08-05
 .SH NAME
-nfs4_uid_to_name, nfs4_gid_to_name, nfs4_name_to_uid, nfs4_name_to_gid, nfs4_init_name_mapping, nfs4_get_default_domain, nfs4_gss_princ_to_ids, nfs4_gss_princ_to_grouplist, nfs4_gss_princ_to_ids_ex, nfs4_gss_princ_to_grouplist_ex, nfs4_set_debug: idmapping for nfsv4
+nfs4_uid_to_name, nfs4_gid_to_name, nfs4_name_to_uid, nfs4_name_to_gid,
+nfs4_init_name_mapping, nfs4_get_default_domain,
+nfs4_gss_princ_to_ids, nfs4_gss_princ_to_grouplist,
+nfs4_gss_princ_to_ids_ex,
+nfs4_gss_princ_to_grouplist_ex,
+nfs4_set_debug \- ID mapping routines used for NFSv4
 .SH SYNOPSIS
 .B #include <nfs4_idmap.h>
 .sp
@@ -10,11 +15,19 @@ nfs4_uid_to_name, nfs4_gid_to_name, nfs4_name_to_uid, nfs4_name_to_gid, nfs4_ini
 .sp
 .BI "int nfs4_uid_to_name(uid_t uid, char *domain, char *name, size_t len);"
 .sp
+.BI "int nfs4_uid_to_owner(uid_t uid, char *domain, char *name, size_t len);"
+.sp
 .BI "int nfs4_gid_to_name(gid_t gid, char *domain, char *name, size_t len);"
+.sp
+.BI "int nfs4_gid_to_owner(gid_t gid, char *domain, char *name, size_t len);"
 .sp
 .BI "int nfs4_name_to_uid(char *name, uid_t *uid);"
 .sp
 .BI "int nfs4_name_to_gid(char *name, gid_t *gid);"
+.sp
+.BI "int nfs4_owner_to_uid(char *name, uid_t *uid);"
+.sp
+.BI "int nfs4_owner_to_gid(char *name, gid_t *gid);"
 .sp
 .BI "int nfs4_gss_princ_to_ids(char *secname, char *princ, uid_t *uid, gid_t *gid);"
 .sp
@@ -51,6 +64,29 @@ write the corresponding nfsv4 name into the buffer provided in
 which must be of length at least
 .IR len .
 .PP
+The
+.B nfs4_uid_to_owner()
+and
+.B nfs4_gid_to_group_owner()
+functions, given
+.I uid
+or
+.I gid
+and
+.I domain
+(as a null-terminated string),
+write the corresponding nfsv4 name into the buffer provided in
+.IR name ,
+which must be of length at least
+.IR len .
+If there is no valid mapping from
+.I uid
+or
+.I gid
+to
+.IR name ,
+then the numerical string representing uid or gid is returned instead.
+.PP
 The 
 .B nfs4_name_to_uid()
 and
@@ -59,6 +95,22 @@ functions, given
 .I name
 (as a null-terminated string), return the corresponding uid or gid in
 the second parameter.
+.PP
+The 
+.B nfs4_owner_to_uid()
+and
+.B nfs4_group_owner_to_gid()
+functions, given
+.I name
+(as a null-terminated string), return the corresponding uid or gid in
+the second parameter.
+If there is no valid mapping from
+.I name
+to
+.I uid
+or
+.I gid
+the value for the user or group "nobody" will be returned instead.
 . PP
 The
 .B nfs4_init_name_mapping()
