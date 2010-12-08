@@ -42,6 +42,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <ctype.h>
 #include <pwd.h>
 #include <grp.h>
 #include <netdb.h>
@@ -90,6 +91,15 @@ static char * toupper_str(char *s)
 	for (i=0; i < strlen(s); i++)
 		s[i] = toupper(s[i]);
 	return s;
+}
+
+static int id_as_chars(char *name, int *id)
+{
+	long int value = strtol(name, NULL, 10);
+	if (value == 0)
+		return 0;
+	*id = (int)value;
+	return 1;
 }
 
 static int domain_from_dns(char **domain)
@@ -386,6 +396,20 @@ int nfs4_gid_to_name(gid_t gid, char *domain, char *name, size_t len)
 	RUN_TRANSLATIONS(gid_to_name, 0, gid, domain, name, len);
 }
 
+int nfs4_uid_to_owner(uid_t uid, char *domain, char *name, size_t len)
+{
+	if (nfs4_uid_to_name(uid, domain, name, len))
+		sprintf(name, "%u", uid);
+	return 0;
+}
+
+int nfs4_gid_to_group_owner(gid_t gid, char *domain, char *name, size_t len)
+{
+	if (nfs4_gid_to_name(gid, domain, name, len))
+		sprintf(name, "%u", gid);
+	return 0;
+}
+
 int nfs4_name_to_uid(char *name, uid_t *uid)
 {
 	RUN_TRANSLATIONS(name_to_uid, 0, name, uid);
@@ -394,6 +418,46 @@ int nfs4_name_to_uid(char *name, uid_t *uid)
 int nfs4_name_to_gid(char *name, gid_t *gid)
 {
 	RUN_TRANSLATIONS(name_to_gid, 0, name, gid);
+}
+
+static int set_id_to_nobody(int *id, int is_uid)
+{
+	int rc = 0;
+	const char name[] = "nobody@";
+	char nobody[strlen(name) + strlen(get_default_domain()) + 1];
+	strcpy(nobody, name);
+	strcat(nobody, get_default_domain());
+
+	if (is_uid)
+		rc = nfs4_name_to_uid(nobody, id);
+	else
+		rc = nfs4_name_to_gid(nobody, id);
+
+	if (rc) {
+		*id = -2;
+		rc = 0;
+	}
+	return rc;
+}
+
+int nfs4_owner_to_uid(char *name, uid_t *uid)
+{
+	int rc = nfs4_name_to_uid(name, uid);
+	if (rc && id_as_chars(name, uid))
+		rc = 0;
+	else if (rc)
+		rc = set_id_to_nobody(uid, 1);
+	return rc;
+}
+
+int nfs4_group_owner_to_gid(char *name, gid_t *gid)
+{
+	int rc = nfs4_name_to_gid(name, gid);
+	if (rc && id_as_chars(name, gid))
+		rc = 0;
+	else if (rc)
+		rc = set_id_to_nobody(gid, 0);
+	return rc;
 }
 
 int nfs4_gss_princ_to_ids(char *secname, char *princ, uid_t *uid, gid_t *gid)
