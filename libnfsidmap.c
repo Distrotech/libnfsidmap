@@ -246,7 +246,7 @@ int nfs4_init_name_mapping(char *conffile)
 			default_domain = IDMAPD_DEFAULT_DOMAIN;
 		}
 	}
-	IDMAP_LOG(1, ("libnfsidmap: using%s domain: %s\n",
+	IDMAP_LOG(1, ("libnfsidmap: using%s domain: %s",
 		(dflt ? " (default)" : ""), default_domain));
 
 	/* Get list of "local equivalent" realms.  Meaning the list of realms
@@ -274,9 +274,30 @@ int nfs4_init_name_mapping(char *conffile)
 		local_realms->cnt++;
 	}
 
+	if (idmap_verbosity >= 1) {
+		struct conf_list_node *r;
+		char *buf = NULL;
+		int siz=0;
+
+		if (local_realms) {
+			TAILQ_FOREACH(r, &local_realms->fields, link) {
+				siz += (strlen(r->field)+4);
+			}
+			buf = malloc(siz);
+			if (buf) {
+				TAILQ_FOREACH(r, &local_realms->fields, link) {
+					sprintf(buf, "'%s' ", r->field);
+				}
+				IDMAP_LOG(1, ("libnfsidmap: Realms list: %s", buf));
+				free(buf);
+			}
+		} else 
+			IDMAP_LOG(1, ("libnfsidmap: Realms list: <NULL> "));
+	}
+
 	nfs4_methods = conf_get_list("Translation", "Method");
 	if (nfs4_methods) {
-		IDMAP_LOG(1, ("libnfsidmap: processing 'Method' list\n"));
+		IDMAP_LOG(1, ("libnfsidmap: processing 'Method' list"));
 		if (load_plugins(nfs4_methods, &nfs4_plugins) == -1)
 			return -ENOENT;
 	} else {
@@ -294,7 +315,7 @@ int nfs4_init_name_mapping(char *conffile)
 
 	gss_methods = conf_get_list("Translation", "GSS-Methods");
 	if (gss_methods) {
-		IDMAP_LOG(1, ("libnfsidmap: processing 'GSS-Methods' list\n"));
+		IDMAP_LOG(1, ("libnfsidmap: processing 'GSS-Methods' list"));
 		if (load_plugins(gss_methods, &gss_plugins) == -1)
 			goto out;
 	}
