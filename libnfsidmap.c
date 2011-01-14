@@ -52,6 +52,7 @@
 #include <syslog.h>
 #include <stdarg.h>
 #include <dlfcn.h>
+#include <ctype.h>
 #include "nfsidmap.h"
 #include "nfsidmap_internal.h"
 #include "cfg.h"
@@ -209,7 +210,7 @@ out:
 		unload_plugins(plgns);
 	return ret;
 }
-int nfs4_cleanup_name_mapping()
+void nfs4_cleanup_name_mapping()
 {
 	if (nfs4_plugins)
 		unload_plugins(nfs4_plugins);
@@ -221,7 +222,6 @@ int nfs4_cleanup_name_mapping()
 int nfs4_init_name_mapping(char *conffile)
 {
 	int ret = -ENOENT;
-	char *method;
 	int dflt = 0;
 	struct conf_list *nfs4_methods, *gss_methods;
 
