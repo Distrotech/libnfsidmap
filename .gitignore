@@ -28,4 +28,8 @@ umich_ldap.la
 umich_ldap.lo
 configure.in~
 m4/
-
+*.o
+cscope.*
+config.h
+config.h.in
+stamp-h1
