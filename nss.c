@@ -141,7 +141,7 @@ static char *strip_domain(const char *name, const char *domain)
 	if (c == NULL && domain == NULL) {
 		len = strlen(name) + 1;
 	} else {
-		if (domain && strcmp(c + 1, domain) != 0)
+		if (domain && strcasecmp(c + 1, domain) != 0)
 			goto out;
 		len = c - name;
 	}
