@@ -285,8 +285,9 @@ int nfs4_init_name_mapping(char *conffile)
 			}
 			buf = malloc(siz);
 			if (buf) {
+				*buf = 0;
 				TAILQ_FOREACH(r, &local_realms->fields, link) {
-					sprintf(buf, "'%s' ", r->field);
+					sprintf(buf+strlen(buf), "'%s' ", r->field);
 				}
 				IDMAP_LOG(1, ("libnfsidmap: Realms list: %s", buf));
 				free(buf);
