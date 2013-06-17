@@ -1,11 +1,12 @@
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 
-AC_PREREQ([2.66])
+AC_PREREQ([2.69])
 AC_INIT([libnfsidmap],[0.25],[linux-nfs@vger.kernel.org])
 AC_CONFIG_SRCDIR([nfsidmap.h])
 AC_CONFIG_MACRO_DIR([m4])
 AM_INIT_AUTOMAKE
+AM_PROG_AR
 LT_INIT
 
 # Checks for programs.
