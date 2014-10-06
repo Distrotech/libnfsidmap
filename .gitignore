@@ -1,15 +1,9 @@
 Makefile.in
-aclocal.m4
-autom4te.cache/
-config.guess
-config.sub
+/aclocal.m4
+/autom4te.cache/
+/build-aux/
 configure
-depcomp
-ltmain.sh
-missing
-install-sh
 Makefile
-install-sh
 .deps/
 config.log
 config.status
@@ -21,7 +15,6 @@ nsswitch.la
 static.la
 umich_ldap.la
 configure.in~
-m4/
 *.o
 *.lo
 cscope.*
