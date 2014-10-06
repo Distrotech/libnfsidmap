@@ -1,0 +1,27 @@
+V_0.26 {
+global:
+	nfs4_init_name_mapping;
+	nfs4_get_default_domain;
+	nfs4_uid_to_name;
+	nfs4_gid_to_name;
+	nfs4_uid_to_owner;
+	nfs4_gid_to_group_owner;
+	nfs4_name_to_uid;
+	nfs4_name_to_gid;
+	nfs4_owner_to_uid;
+	nfs4_owner_to_gid;
+	nfs4_group_owner_to_gid;
+	nfs4_gss_princ_to_ids;
+	nfs4_gss_princ_to_grouplist;
+	nfs4_gss_princ_to_ids_ex;
+	nfs4_gss_princ_to_grouplist_ex;
+	nfs4_set_debug;
+local:
+	*;
+};
+/*
+V_0.27 {
+global:
+	...
+} V_0.26;
+*/
