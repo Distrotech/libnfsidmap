@@ -98,7 +98,7 @@ static char * toupper_str(char *s)
 	return s;
 }
 
-static int id_as_chars(char *name, int *id)
+static int id_as_chars(char *name, uid_t *id)
 {
 	long int value = strtol(name, NULL, 10);
 
@@ -494,7 +494,7 @@ int nfs4_name_to_gid(char *name, gid_t *gid)
 	RUN_TRANSLATIONS(name_to_gid, 0, name, gid);
 }
 
-static int set_id_to_nobody(int *id, int is_uid)
+static int set_id_to_nobody(uid_t *id, uid_t is_uid)
 {
 	int rc = 0;
 	const char name[] = "nobody@";
@@ -504,10 +504,10 @@ static int set_id_to_nobody(int *id, int is_uid)
          * configured, before we try to do a full lookup for the
          * NFS nobody user. */
 	if (is_uid && nobody_uid != (uid_t)-1) {
-		*id = (int)nobody_uid;
+		*id = (uid_t)nobody_uid;
 		return 0;
 	} else if (!is_uid && nobody_gid != (gid_t)-1) {
-		*id = (int)nobody_gid;
+		*id = (uid_t)nobody_gid;
 		return 0;
 	}
 
@@ -542,7 +542,7 @@ int nfs4_group_owner_to_gid(char *name, gid_t *gid)
 	if (rc && id_as_chars(name, gid))
 		rc = 0;
 	else if (rc)
-		rc = set_id_to_nobody(gid, 0);
+		rc = set_id_to_nobody((uid_t *)gid, 0);
 	return rc;
 }
 
