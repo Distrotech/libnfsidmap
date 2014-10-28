@@ -16,6 +16,10 @@ global:
 	nfs4_gss_princ_to_ids_ex;
 	nfs4_gss_princ_to_grouplist_ex;
 	nfs4_set_debug;
+	idmap_verbosity;
+	idmap_log_func;
+	get_default_domain;
+	get_local_realms;
 local:
 	*;
 };
