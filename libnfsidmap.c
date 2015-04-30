@@ -100,8 +100,11 @@ static char * toupper_str(char *s)
 
 static int id_as_chars(char *name, uid_t *id)
 {
-	long int value = strtol(name, NULL, 10);
+	long int value;
 
+	if (name == NULL)
+		return 0;
+	value = strtol(name, NULL, 10);
 	if (value == 0) {
 		/* zero value ids are valid */
 		if (strcmp(name, "0") != 0)
